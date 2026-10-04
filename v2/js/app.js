@@ -68,6 +68,7 @@
   const findSec = id => song && song.sections.find(s => s.id === id);
   // a phone (not just a narrow window): used for the landscape layout and the rotate prompt
   const isPhone = () => matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 600;
+  const landPhone = () => matchMedia('(orientation: landscape) and (max-height: 500px)').matches; // same query as the CSS
   function afterChange(anim) {
     if (sel && !findSec(sel.sec)) sel = null;
     if (sel && sel.type === 'melody' && !findSec(sel.sec).melody) sel = null;
@@ -343,6 +344,7 @@
       const res = await analyzeTake(out.buffer, out.info, out.taps);
       if (!res) { toast('没有听出旋律。离麦克风近一点再试。'); show('home'); return; }
       newSong(res, out.buffer);
+      promptRotate();
     } finally { $('#analyzing').hidden = true; }
   }
   // Esc while recording asks first; a second Esc (or the red button) confirms.
@@ -389,7 +391,9 @@
     $('#keyChip span').textContent = Theory.keyLabel(song.key);
     $('#tempoChip span').textContent = '♩ ' + song.bpm;
     $('#styleChip span').textContent = Arrange.STYLES[song.style].label;
-    $('#preArrange').hidden = song.arranged && !arranging;
+    // before arranging: style chip + 编曲; after: the style bar (on a landscape phone the chip stays instead, via CSS)
+    $('#work').classList.toggle('arranged', song.arranged && !arranging);
+    $('#arrangeBtn').hidden = song.arranged && !arranging;
     $('#styleSeg').hidden = !song.arranged || arranging;
     $('#sunoBtn').hidden = !song.arranged || arranging;
     const seg = $('#styleSeg'); seg.innerHTML = '';
@@ -404,6 +408,8 @@
     const ls = lanes(), { a: st, total } = starts(), scroll = $('#arrScroll'), keepScroll = scroll.scrollLeft;
     const avail = scroll.clientWidth || 800;
     L.laneH = ls.length <= 3 ? 60 : 46;
+    // landscape phone (Figma M2): the arrangement takes the rest of the screen height
+    if (landPhone()) L.laneH = clamp((innerHeight - $('#arr').getBoundingClientRect().top - 8 - L.secH - 14) / Math.max(1, ls.length), 34, 60);
     // bars fill the width when the song is short; past that they keep a minimum width and the timeline scrolls
     L.bw = clamp((avail - 72) / Math.max(total, 12), innerWidth <= 640 || isPhone() ? 56 : 72, 110);
     const W = total * L.bw + 72, H = L.secH + ls.length * L.laneH;
@@ -674,6 +680,7 @@
   function renderEditor() {
     const ed = $('#editor'), hint = $('#editorHint');
     const s = sel && findSec(sel.sec);
+    $('#work').classList.toggle('editing', !!s); // landscape phone: the editor replaces the arrangement (Figma M3)
     if (!s) { ed.hidden = true; hint.hidden = false; pr = null; return; }
     hint.hidden = true; ed.hidden = false;
     let type = sel.type;
@@ -919,7 +926,10 @@
     setTimeout(() => { arranging = false; btn.classList.remove('working'); btn.innerHTML = icon('sparkle') + '<span>编曲</span>'; renderWork(); }, 1700);
   });
   $('#styleChip').addEventListener('click', e => openMenu(e.currentTarget, m => {
-    for (const id of Arrange.STYLE_ORDER) item(m, (id === song.style ? icon('check') : '<span style="width:16px"></span>') + Arrange.STYLES[id].label, () => { closeMenu(); song.style = id; renderWork(); });
+    for (const id of Arrange.STYLE_ORDER) item(m, (id === song.style ? icon('check') : '<span style="width:16px"></span>') + Arrange.STYLES[id].label, () => {
+      closeMenu(); if (id === song.style) return;
+      if (song.arranged) commit(() => { song.style = id; }, 'style'); else { song.style = id; renderWork(); }
+    });
   }));
   // key menu (Figma 30): first the detected key + "（自动）", then all 24 keys. Changing key re-harmonises an arranged song.
   const sameKey = (a, b) => a.tonic === b.tonic && a.mode === b.mode;
@@ -1089,7 +1099,20 @@
     if (screen === 'home') startMain(); else if (screen === 'work') player ? stopPlay() : startPlay();
   });
   document.addEventListener('keyup', e => { if (liveRec() && DRUM_KEYS[e.code]) e.preventDefault(); });
-  let rsz = 0; addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(() => { if (screen === 'work') { renderArr(); renderEditor(); } }, 120); });
+  /* Phone: after recording in portrait, suggest turning the phone (Figma M1). No Fullscreen API, no orientation lock.
+     Not turned within 5 s → hint that rotation lock may be on (M1b). At most once per recording. */
+  const landscapeMQ = matchMedia('(orientation: landscape)');
+  let rotateT = 0;
+  function promptRotate() {
+    if (!isPhone() || landscapeMQ.matches) return;
+    $('#rotateOverlay').hidden = false;
+    clearTimeout(rotateT); rotateT = setTimeout(() => { if (!$('#rotateOverlay').hidden) toast('尝试关闭旋转锁定。'); }, 5000);
+  }
+  function closeRotate() { clearTimeout(rotateT); $('#rotateOverlay').hidden = true; }
+  $('#rotateSkip').addEventListener('click', closeRotate);
+  landscapeMQ.addEventListener('change', () => { if (landscapeMQ.matches) closeRotate(); });
+  let rsz = 0;
+ addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(() => { if (screen === 'work') { renderArr(); renderEditor(); } }, 120); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => screen === 'work' && renderWork());
 
   window.__app = { get song() { return song; }, newSong, analyzeTake, takes, select, renderWork, undo, redo };
