@@ -111,7 +111,7 @@
     try {
       const S = Synth.ctx(), buf = await S.c.decodeAudioData(await f.arrayBuffer());
       const mono = await toMonoBuffer(buf), res = await analyzeTake(mono, null);
-      if (!res) { toast('没有听出旋律或拍手。换一段更清楚的录音试试。'); return; }
+      if (!res) { toast('没有听出旋律。换一段更清楚的录音试试。'); return; }
       newSong(res, mono);
     } catch (err) { console.error(err); toast('这个文件打不开。换成 mp3、m4a 或 wav 再试。'); }
     finally { $('#analyzing').hidden = true; }
@@ -119,24 +119,6 @@
   syncHome();
 
   /* ---------------- recording ---------------- */
-  function makeHP(sr, fc) {
-    const w = 2 * Math.PI * fc / sr, al = Math.sin(w) / (2 * .707), cw = Math.cos(w), a0 = 1 + al;
-    const b0 = (1 + cw) / 2 / a0, b1 = -(1 + cw) / a0, a1 = -2 * cw / a0, a2 = (1 - al) / a0;
-    let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-    return v => { const o = b0 * v + b1 * x1 + b0 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = v; y2 = y1; y1 = o; return o; };
-  }
-  function liveHits(R, data, base) {
-    const hop = 256;
-    for (let i = 0; i + hop <= data.length; i += hop) {
-      let a = 0, h = 0, vh = 0;
-      for (let j = i; j < i + hop; j++) { const v = data[j], x = R.hp2(v), y = R.hp5(v); a += v * v; h += x * x; vh += y * y; }
-      a = Math.sqrt(a / hop); h = Math.sqrt(h / hop); vh = Math.sqrt(vh / hop);
-      const hist = R.hf; const mn = hist.length >= 10 ? Math.min(...hist.slice(-10, -1)) : Infinity;
-      hist.push(h); if (hist.length > 20) hist.shift();
-      const t = (base + i) / R.sr;
-      if (h > .012 && h / (a + 1e-9) > .3 && h > 4 * mn + 1e-4 && t - R.lastHit > .09) { R.lastHit = t; R.live.hits.push({ t, k: vh / (h + 1e-9) > .5 ? 'snap' : 'clap' }); }
-    }
-  }
   async function startCapture(opts) {
     const S = Synth.ctx(), c = S.c, sr = c.sampleRate;
     let stream;
@@ -144,13 +126,13 @@
     catch (e) { toast('无法使用麦克风。可以先用手机录一段，再上传。'); return null; }
     const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 2048; src.connect(an);
     const proc = c.createScriptProcessor(4096, 1, 1), mute = c.createGain(); mute.gain.value = 0;
-    const R = { S, c, sr, stream, src, an, proc, mute, chunks: [], n: 0, firstCtx: null, opts, live: { pitch: [], hits: [] }, buf: new Float32Array(2048), d: new Float32Array(1100),
-      lo: 56, hi: 74, hp2: makeHP(sr, 2000), hp5: makeHP(sr, 4500), hf: [], lastHit: -1, spb: 60 / opts.bpm, bus: c.createGain(), note: null };
+    const R = { S, c, sr, stream, src, an, proc, mute, chunks: [], n: 0, firstCtx: null, opts, live: { pitch: [], hits: [] }, taps: [], buf: new Float32Array(2048), d: new Float32Array(1100),
+      lo: 56, hi: 74, spb: 60 / opts.bpm, bus: c.createGain(), note: null };
     R.bus.gain.value = .55; R.bus.connect(S.input);
     proc.onaudioprocess = e => {
       const data = new Float32Array(e.inputBuffer.getChannelData(0));
       if (R.firstCtx === null) R.firstCtx = Math.max(0, e.playbackTime - 2 * data.length / sr);
-      liveHits(R, data, R.n); R.chunks.push(data); R.n += data.length;
+      R.chunks.push(data); R.n += data.length;
     };
     src.connect(proc); proc.connect(mute); mute.connect(c.destination);
     R.tStart = c.currentTime + .15;
@@ -173,6 +155,15 @@
       if (t > R.c.currentTime - .02) Synth.play(R.S, R.bus, { ...e, t });
       B.idx++;
     }
+  }
+  /* A drum key (Space / Alt) or pad: sound it now, mark it on the live view, keep its context time for analysis. */
+  function tap(R, k) {
+    if (!R || R.stopped || R.firstCtx === null) return;
+    const c = R.c, now = c.currentTime;
+    if (now < R.beat0Ctx) return; // count-in: ignored
+    Synth.play(R.S, R.bus, { drum: k === 'clap' ? 'snare' : 'hat', t: now, v: .8 });
+    R.live.hits.push({ t: now - R.firstCtx, k });
+    R.taps.push({ ctx: now, k });
   }
   function liveLoop(R) {
     if (R.stopped) return;
@@ -241,31 +232,35 @@
       if (offs.length >= 2) { const m = DSP.median(offs); if (Math.abs(m) < .25) beat0 += m; }
       info = { bpm: R.opts.bpm, beat0 };
     }
-    return { buffer, info };
+    // With the metronome the player taps along with clicks that leave the speaker outputLatency late, so taps are
+    // placed on the beat grid directly. Without it they share the buffer clock with the voice and go through tempo estimation.
+    const outLat = R.c.outputLatency || R.c.baseLatency || 0;
+    const taps = R.opts.metronome ? R.taps.map(p => ({ b: (p.ctx - outLat - R.beat0Ctx) / R.spb, k: p.k })) : R.taps.map(p => ({ t: p.ctx - R.firstCtx, k: p.k }));
+    return { buffer, info, taps };
   }
   async function toMonoBuffer(buf) {
     if (buf.numberOfChannels === 1) return buf;
     const x = await DSP.toMono(buf, buf.sampleRate), b = new AudioBuffer({ length: x.length, sampleRate: buf.sampleRate, numberOfChannels: 1 });
     b.copyToChannel(x, 0); return b;
   }
-  async function analyzeTake(buffer, info) {
-    const x = buffer.getChannelData(0), sr = buffer.sampleRate;
-    const hits = DSP.detectHits(x, sr);
-    const mask = hits.map(h => [h.t - .01, h.t + .07]);
+  /* buffer: the take. info: {bpm, beat0 (seconds into the buffer)} when recorded with the metronome, else null (tempo is estimated).
+     taps: drum keys, either [{b: beats from beat 0, k}] (metronome) or [{t: seconds into the buffer, k}] (no metronome). */
+  async function analyzeTake(buffer, info, taps = []) {
     const x22 = await DSP.toMono(buffer, DSP.SR);
-    const tr = DSP.transcribe(DSP.pitchFrames(x22), mask);
-    // a clap masks the start of a note sung on the same beat: move that note back onto the clap
-    for (const n of tr.notes) { const h = hits.find(h => n.t > h.t && n.t - h.t < .11); if (h) n.t = h.t; }
+    const tr = DSP.transcribe(DSP.pitchFrames(x22));
+    const secTaps = taps.filter(p => p.t !== undefined), beatTaps = taps.filter(p => p.b !== undefined);
     let bpm, t0;
     if (info) ({ bpm, beat0: t0 } = info);
-    else ({ bpm, t0 } = DSP.estimateTempo([...tr.notes.map(n => n.t), ...hits.map(h => h.t)]));
-    let { notes, hits: hb } = DSP.toBeats(tr.notes, hits, bpm, t0);
+    else ({ bpm, t0 } = DSP.estimateTempo([...tr.notes.map(n => n.t), ...secTaps.map(p => p.t)]));
+    let { notes, hits: hb } = DSP.toBeats(tr.notes, secTaps, bpm, t0);
+    for (const p of beatTaps) { const t = Math.round(p.b * 4) / 4; if (t < -0.01) continue; if (!hb.some(h => h.t === Math.max(0, t) && h.k === p.k)) hb.push({ t: Math.max(0, t), k: p.k }); }
+    hb.sort((a, b) => a.t - b.t);
     const first = Math.min(Infinity, ...notes.map(n => n.s), ...hb.map(h => h.t));
     if (!isFinite(first)) return null;
     const shift = Math.floor(first / 4) * 4;
     notes = notes.map(n => ({ ...n, s: n.s - shift })); hb = hb.map(h => ({ ...h, t: h.t - shift }));
     const end = Math.max(0, ...notes.map(n => n.s + n.d), ...hb.map(h => h.t + .25));
-    window.__lastAnalysis = { hits, notes: tr.notes, bpm, t0 };
+    window.__lastAnalysis = { taps, notes: tr.notes, bpm, t0 };
     return { notes, hits: hb, bpm, bars: Math.max(1, Math.ceil(end / 4 - 1e-6)) };
   }
   function newSong(res, buffer) {
@@ -291,11 +286,22 @@
     if (!out) { show('home'); return; }
     $('#analyzing').hidden = false;
     try {
-      const res = await analyzeTake(out.buffer, out.info);
-      if (!res) { toast('没有听出旋律或拍手。离麦克风近一点再试。'); show('home'); return; }
+      const res = await analyzeTake(out.buffer, out.info, out.taps);
+      if (!res) { toast('没有听出旋律。离麦克风近一点再试。'); show('home'); return; }
       newSong(res, out.buffer);
     } finally { $('#analyzing').hidden = true; }
   }
+  // Esc while recording asks first; a second Esc (or the red button) confirms.
+  function openQuit() { $('#quitModal').hidden = false; $('#quitNo').focus(); }
+  function closeQuit() { $('#quitModal').hidden = true; }
+  function abandonMain() {
+    closeQuit();
+    const R = mainRec; mainRec = null;
+    if (R) stopCapture(R);
+    show('home');
+  }
+  $('#quitNo').addEventListener('click', closeQuit);
+  $('#quitYes').addEventListener('click', abandonMain);
   $('#recBtn').addEventListener('click', startMain);
   $('#stopBtn').addEventListener('click', stopMain);
 
@@ -749,31 +755,32 @@
     $('#addModal').hidden = false;
   }
   $('#addBacking').addEventListener('click', e => { const on = e.currentTarget.getAttribute('aria-checked') !== 'true'; e.currentTarget.setAttribute('aria-checked', on); addState.backing = on; });
-  $('#addRec').addEventListener('click', async () => {
-    const A = addState; if (!A) return;
-    if (!A.rec) {
-      let backing = null;
-      if (A.backing && song.arranged) {
-        const base = song.sections.find(s => s.role === 'rec' && s.chords) || song.sections.find(s => s.chords);
-        if (base) { const c = Arrange.compile({ ...song, sections: [{ ...base, melody: null, hits: [] }], mute: {} }); backing = { events: c.events.filter(e => e.lane !== 'drums' || e.drum === 'kick'), loop: c.duration }; }
-      }
-      $('#addOk').disabled = true; A.res = null;
-      $('#addTimerWrap').hidden = false;
-      $('#addRec').innerHTML = icon('stop'); $('#addRec').setAttribute('aria-label', '停止');
-      A.rec = await startCapture({ canvas: $('#addCv'), noteEl: $('#addNote'), timerEl: $('#addTimer'), metronome: true, bpm: song.bpm, backing, compact: true, color: instColor(A.inst) });
-      if (!A.rec) { $('#addRec').innerHTML = icon('mic'); $('#addTimerWrap').hidden = true; }
-    } else {
-      const R = A.rec; A.rec = null;
-      $('#addRec').innerHTML = icon('mic'); $('#addRec').setAttribute('aria-label', '重新录');
-      const out = await stopCapture(R);
-      if (!out) return;
-      const res = await analyzeTake(out.buffer, out.info);
-      if (!res) { toast('没有听出旋律或拍手。再录一次试试。'); return; }
-      A.res = res; A.buffer = out.buffer; $('#addOk').disabled = false;
-      $('#addNote').classList.remove('count');
-      $('#addNote').textContent = '';
+  async function startAddRec() {
+    const A = addState; if (!A || A.rec) return;
+    let backing = null;
+    if (A.backing && song.arranged) {
+      const base = song.sections.find(s => s.role === 'rec' && s.chords) || song.sections.find(s => s.chords);
+      if (base) { const c = Arrange.compile({ ...song, sections: [{ ...base, melody: null, hits: [] }], mute: {} }); backing = { events: c.events.filter(e => e.lane !== 'drums' || e.drum === 'kick'), loop: c.duration }; }
     }
-  });
+    $('#addOk').disabled = true; A.res = null;
+    $('#addTimerWrap').hidden = false;
+    $('#addRec').innerHTML = icon('stop'); $('#addRec').setAttribute('aria-label', '停止');
+    A.rec = await startCapture({ canvas: $('#addCv'), noteEl: $('#addNote'), timerEl: $('#addTimer'), metronome: true, bpm: song.bpm, backing, compact: true, color: instColor(A.inst) });
+    if (!A.rec) { $('#addRec').innerHTML = icon('mic'); $('#addTimerWrap').hidden = true; }
+  }
+  async function stopAddRec() {
+    const A = addState; if (!A || !A.rec) return;
+    const R = A.rec; A.rec = null;
+    $('#addRec').innerHTML = icon('mic'); $('#addRec').setAttribute('aria-label', '重新录');
+    const out = await stopCapture(R);
+    if (!out) return;
+    const res = await analyzeTake(out.buffer, out.info, out.taps);
+    if (!res) { toast('没有听出旋律。离麦克风近一点再试。'); return; }
+    A.res = res; A.buffer = out.buffer; $('#addOk').disabled = false;
+    $('#addNote').classList.remove('count');
+    $('#addNote').textContent = '';
+  }
+  $('#addRec').addEventListener('click', () => addState && (addState.rec ? stopAddRec() : startAddRec()));
   async function closeAdd() { if (addState && addState.rec) { const R = addState.rec; addState.rec = null; await stopCapture(R); } addState = null; $('#addModal').hidden = true; }
   $('#addCancel').addEventListener('click', closeAdd); $('#addClose').addEventListener('click', closeAdd);
   $('#addOk').addEventListener('click', () => {
@@ -787,7 +794,22 @@
   });
 
   /* ---------------- keyboard & resize ---------------- */
+  // While a take is recording: Space = snare ('clap'), Alt = hi-hat ('snap'), Enter = stop and analyse, Esc = abandon.
+  const DRUM_KEYS = { Space: 'clap', AltLeft: 'snap', AltRight: 'snap' };
+  const liveRec = () => screen === 'recording' && mainRec ? mainRec : !$('#addModal').hidden && addState && addState.rec ? addState.rec : null;
   document.addEventListener('keydown', e => {
+    const R = liveRec();
+    if (R) {
+      const quitOpen = !$('#quitModal').hidden;
+      // preventDefault also keeps a focused button from being clicked and Alt from focusing the browser menu bar
+      if (DRUM_KEYS[e.code] || e.key === 'Enter') e.preventDefault();
+      if (e.key === 'Escape') { e.preventDefault(); if (screen === 'recording') quitOpen ? abandonMain() : openQuit(); else closeAdd(); return; }
+      if (quitOpen || e.repeat) return;
+      if (DRUM_KEYS[e.code]) tap(R, DRUM_KEYS[e.code]);
+      else if (e.key === 'Enter') screen === 'recording' ? stopMain() : stopAddRec();
+      return;
+    }
+    if (screen === 'recording') { if (e.key === 'Escape' && !$('#quitModal').hidden) closeQuit(); return; }
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key.toLowerCase() === 'z' && screen === 'work' && $('#addModal').hidden) { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if (mod && e.key.toLowerCase() === 'y' && screen === 'work') { e.preventDefault(); redo(); return; }
@@ -798,8 +820,9 @@
     if (e.code !== 'Space' || e.target.closest('button, input, a')) return;
     e.preventDefault();
     if (!$('#addModal').hidden) return;
-    if (screen === 'home') startMain(); else if (screen === 'recording') stopMain(); else player ? stopPlay() : startPlay();
+    if (screen === 'home') startMain(); else if (screen === 'work') player ? stopPlay() : startPlay();
   });
+  document.addEventListener('keyup', e => { if (liveRec() && DRUM_KEYS[e.code]) e.preventDefault(); });
   let rsz = 0; addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(() => { if (screen === 'work') { renderArr(); renderEditor(); } }, 120); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => screen === 'work' && renderWork());
 

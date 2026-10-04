@@ -15,17 +15,14 @@ app.js     → （IIFE）界面（依赖以上全部；调试时暴露 window.__
 ## 1. 数据流
 
 ```
-麦克风 / 上传文件
-   │ startCapture() → ScriptProcessor 收集 PCM；实时：liveLoop()（YIN 音高）+ liveHits()（拍打声）
+麦克风 / 上传文件                     键盘：空格 = 军鼓，Alt = 踩镲（手机：两个大按钮）
+   │ startCapture() → ScriptProcessor 收集 PCM；实时：liveLoop()（YIN 音高）；tap() 记下每次打击的 AudioContext 时间
    ▼
-AudioBuffer（单声道，设备采样率）
-   │ analyzeTake(buffer, info)
-   │   ├─ DSP.detectHits(x, sr)          → 拍手 / 响指的时刻（秒）
-   │   ├─ DSP.toMono(buf, 22050) → DSP.pitchFrames() → DSP.transcribe(frames, mask)
-   │   │                                 → 音符（秒）；拍打声附近的帧被屏蔽
-   │   ├─ 被拍打声遮住起点的音符，起点移回拍打声的时刻
+AudioBuffer（单声道，设备采样率）+ taps
+   │ stopCapture() 把 taps 换算好（见下面“按键时间换算”），再 analyzeTake(buffer, info, taps)
+   │   ├─ DSP.toMono(buf, 22050) → DSP.pitchFrames() → DSP.transcribe(frames) → 音符（秒）
    │   ├─ 速度：开节拍器 → info.bpm + info.beat0（节拍器回声校准过）
-   │   │        不开     → DSP.estimateTempo(所有起音时刻)
+   │   │        不开     → DSP.estimateTempo(音符起点 + 打击时刻)
    │   └─ DSP.toBeats() → 量化到 16 分音符的拍子单位，去掉开头的空小节
    ▼
 { notes, hits, bpm, bars }
@@ -39,6 +36,14 @@ song（见第 2 节）── commit() ──▶ 撤回历史
      ──▶ Synth.render()      离线渲染 → Synth.wav() → WAV
      ──▶ Arrange.toMidi()    多轨 MIDI
 ```
+
+### 按键时间换算
+
+`tap()` 只记 `{ ctx: AudioContext.currentTime, k }`。`stopCapture()` 换算后交给 `analyzeTake(buffer, info, taps)`：
+
+- **开节拍器**：用户是跟着听到的咔嗒声按键，而声音从扬声器出来晚了 `outLat = c.outputLatency || c.baseLatency || 0`，所以拍子位置 = `(ctx - outLat - beat0Ctx) / spb`，`taps = [{ b: 拍, k }]`。这里**不用**节拍器回声校准值，那个值只校准麦克风收到的人声。
+- **不开节拍器**：`taps = [{ t: ctx - firstCtx（缓冲区里的秒数）, k }]`，和音符起点一起交给 `estimateTempo`，再由 `toBeats` 量化。可能差几十毫秒，16 分音符量化能吸收大部分（已知限制）。
+- 预备拍期间的按键忽略。只有鼓点、没有哼唱也会生成作品；两者都没有才算失败。
 
 ## 2. 数据模型
 
@@ -104,13 +109,13 @@ Section = {
 
 **Theory**：`noteName(midi)`、`keyLabel(key)`、`detectKey(notes)`（Krumhansl–Kessler）、`parse(chord)`、`tones(chord)`、`diatonic(key)` → `[{name, roman, degree}]`、`extras(key)`、`harmonize(notes, bars, key)`（每小节选一个调内三和弦，用 Viterbi 算法同时考虑旋律匹配和和弦进行）、`introChords/outroChords(key)`、`voicing(chord)`、`bassNote(chord)`。
 
-**DSP**：`yin()`、`toMono(buffer, sr)`、`pitchFrames(x22k)`、`transcribe(frames, mask)` → `{notes:[{p,t,e}], trace, offset}`、`highpass()`、`detectHits(x, sr)` → `[{t, kind, c, decay}]`、`estimateTempo(onsets)` → `{bpm, t0}`、`toBeats(notes, hits, bpm, t0)`、`median()`。
+**DSP**：`yin()`、`toMono(buffer, sr)`、`pitchFrames(x22k)`、`transcribe(frames)` → `{notes:[{p,t,e}], trace, offset}`、`estimateTempo(onsets)` → `{bpm, t0}`、`toBeats(notes, hits, bpm, t0)`（`hits` 是 `[{t: 秒, k}]`）、`median()`。麦克风**不再识别拍手和响指**，鼓点只来自按键。
 
 **Synth**：`ctx()` → 实时信号链 `S = {c, input, tone, noise, ks}`；`play(S, dest, ev)`，其中 ev 是 `{inst, m, t, d, v}` 或 `{drum, t, v}`；`click(S, t, accent)`；`setTone(hz)`（Lo-fi 的低通滤波）；`render(events, duration, {lowpass})` → AudioBuffer；`wav(buffer)` → Blob。
 
 **Arrange**：`STYLES`、`STYLE_ORDER`、`KITS`、`MELODY_INSTS`、`instLabel()`、`uid()`、`clone()`、`arrange(song)`、`reharmonize(song)`、`compile(song)` → `{events, bars, starts, duration, tone}`、`toMidi(song)` → Blob、`sunoPrompt(song)`。
 
-事件格式：`{ b: 全局拍, db: 时值拍, lane: 'melody:piano' | 'clap' | 'snap' | 'chords' | 'bass' | 'drums', inst | drum, m, v, t: 秒, d: 秒 }`。用户的拍手播放成 `snare`，响指播放成 `hat`。
+事件格式：`{ b: 全局拍, db: 时值拍, lane: 'melody:piano' | 'clap' | 'snap' | 'chords' | 'bass' | 'drums', inst | drum, m, v, t: 秒, d: 秒 }`。用户打的军鼓（`clap`）播放成 `snare`，踩镲（`snap`）播放成 `hat`。内部键名沿用 `clap` / `snap`，避免迁移旧数据，只有显示文字是“军鼓 / 踩镲”。
 
 ## 5. 怎么改
 
@@ -143,17 +148,15 @@ Section = {
 | `dsp.js` | 有声判定 | `c < .25`，`gate = max(第10百分位×2.5, 第95百分位×0.08, 0.004)` | 判断哪些帧算"在哼" |
 | `dsp.js` | `F_MAX` | 800 Hz | 高于此当作无声，用来避开节拍器 |
 | `dsp.js` `transcribe` | 换音 | 偏离 0.6 个半音并持续 4 帧（40ms） | — |
-| `dsp.js` `transcribe` | 断音 | 3 帧无声（被拍打声屏蔽时放宽到 12 帧）；最短音符 80ms | — |
-| `dsp.js` `detectHits` | 起音 | 2 kHz 高通后的能量 > 前 10 帧最小值的 4 倍；高频能量占比 > 0.3；两次最小间隔 90ms | — |
-| `dsp.js` `classify` | 拍手 / 响指 | 每段录音按频谱重心分两群，Fisher 判别值 ≥ 6 且两群重心比 ≥ 1.1 才分；否则全算拍手 | 自适应，不依赖具体麦克风 |
+| `dsp.js` `transcribe` | 断音 | 3 帧无声；最短音符 80ms | — |
+| `dsp.js` `transcribe` | 重新起音 | 能量 > 前 2–8 帧最小值的 2.2 倍，**而且**比 2 帧前高 40%（还在上升） | 第二个条件避免把一个音的起音尾巴当成新音 |
+| `dsp.js` `transcribe` | 起点回溯 | 新音的起点往前移到能量开始上升的地方（最多 8 帧） | 音高要几帧才稳定 |
 | `dsp.js` `estimateTempo` | 速度范围 | 60–170 BPM，偏好以 100 为中心（σ = 0.6 个八度） | — |
-| `app.js` `liveHits` | 实时拍打检测 | 高频能量 > 0.012；4.5 kHz 以上占比 > 0.5 算响指 | **只用于实时显示**，最终结果以离线分析为准 |
-| `app.js` `analyzeTake` | 屏蔽窗口 | 每个拍打声的 [-10ms, +70ms] | — |
 | `synth.js` `chain` | 混音 | 输入增益 0.55，限幅器 −8 dB / 16:1，混响 1.1 秒、湿声 0.18 | 峰值约 0.9 |
 
 ## 7. 已知限制和待办
 
-- **真麦克风没测过**（开发用的浏览器面板没有麦克风）。拍手和响指的分类只在合成声音上验证过。
+- **真麦克风没测过**（开发用的浏览器面板没有麦克风）。
 - `ScriptProcessorNode` 已被标记为过时，以后应该换成 `AudioWorklet`。
 - 开节拍器时的对齐依赖麦克风收到节拍器的声音（`goertzelPeak`）。戴耳机时收不到，只能退回用 `playbackTime` 估计，可能差几十毫秒，16 分音符量化能吸收大部分误差。
 - **刷新页面作品就没了**：`song` 和录音都没有持久化。需要的话可以把 `song` 存到 localStorage，把录音存到 IndexedDB。
@@ -162,4 +165,3 @@ Section = {
 - WAV 渲染约为实时的 1/4（30 秒的歌要 7 秒左右）。
 - 改速度只改播放速度，不会重新对齐原始录音（"原声"下载不受影响）。
 - 语言菜单只是占位。
-- 实时拍打检测和离线分类用的是两套特征，录音时看到的黄点不一定等于最终结果。

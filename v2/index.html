@@ -219,6 +219,10 @@ svg { display: block; }
 .switch[aria-checked="true"] { background: var(--accent); }
 .switch[aria-checked="true"]::after { left: 18px; }
 .sheet-foot { display: flex; justify-content: flex-end; gap: 10px; }
+.sheet.confirm { width: min(400px, 100%); gap: 24px; }
+.sheet.confirm h2 { margin: 0; font-size: 18px; font-weight: 500; }
+.pill.danger { background: var(--record); color: #fff; }
+.pill .kbd { margin-left: 2px; padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, .22); font: 500 12px var(--font-num); }
 .steps { display: flex; flex-direction: column; gap: 22px; }
 .step { display: flex; gap: 14px; }
 .step .n { width: 26px; height: 26px; border-radius: 50%; background: var(--sunken); display: grid; place-items: center; font: 600 13px var(--font-num); flex: none; }
@@ -273,7 +277,7 @@ a.pill { text-decoration: none; justify-content: center; }
     <div class="rec-top"><div class="big-note quiet" id="bigNote">–</div><div class="beats" id="beatDots" hidden><i></i><i></i><i></i><i></i></div></div>
     <div class="card live" id="live"><canvas id="liveCv"></canvas></div>
     <div class="stopbar">
-      <button class="stop-btn" id="stopBtn" aria-label="停止" title="停止（空格）"><i data-icon="stop"></i></button>
+      <button class="stop-btn" id="stopBtn" aria-label="停止" title="停止（回车）"><i data-icon="stop"></i></button>
       <div class="timer"><i></i><span id="timer">0:00</span></div>
     </div>
   </main>
@@ -341,6 +345,13 @@ a.pill { text-decoration: none; justify-content: center; }
       <div class="step"><span class="n">2</span><div class="c"><b>风格提示词</b><div class="prompt"><p id="sunoPrompt"></p><button id="sunoCopy" aria-label="复制"><i data-icon="copy"></i></button></div></div></div>
       <div class="step"><span class="n">3</span><div class="c"><a class="pill dark" href="https://suno.com/create" target="_blank" rel="noopener"><i data-icon="external"></i>打开 Suno</a></div></div>
     </div>
+  </div>
+</div>
+
+<div class="modal" id="quitModal" hidden>
+  <div class="sheet confirm" role="alertdialog" aria-labelledby="quitTitle">
+    <h2 id="quitTitle">放弃这次录音？</h2>
+    <div class="sheet-foot"><button class="pill outline" id="quitNo">继续录音</button><button class="pill danger" id="quitYes">放弃<span class="kbd">Esc</span></button></div>
   </div>
 </div>
 
