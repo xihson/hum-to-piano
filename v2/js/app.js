@@ -66,6 +66,8 @@
   function undo() { if (!hist.undo.length) return; hist.redo.push(snapshot()); song = JSON.parse(hist.undo.pop()); afterChange(); }
   function redo() { if (!hist.redo.length) return; hist.undo.push(snapshot()); song = JSON.parse(hist.redo.pop()); afterChange(); }
   const findSec = id => song && song.sections.find(s => s.id === id);
+  // a phone (not just a narrow window): used for the landscape layout and the rotate prompt
+  const isPhone = () => matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 600;
   function afterChange(anim) {
     if (sel && !findSec(sel.sec)) sel = null;
     if (sel && sel.type === 'melody' && !findSec(sel.sec).melody) sel = null;
@@ -398,10 +400,11 @@
   }
 
   function renderArr(anim) {
-    const ls = lanes(), { a: st, total } = starts(), scroll = $('#arrScroll');
+    const ls = lanes(), { a: st, total } = starts(), scroll = $('#arrScroll'), keepScroll = scroll.scrollLeft;
     const avail = scroll.clientWidth || 800;
     L.laneH = ls.length <= 3 ? 60 : 46;
-    L.bw = clamp((avail - 72) / Math.max(total, 12), 40, 110);
+    // bars fill the width when the song is short; past that they keep a minimum width and the timeline scrolls
+    L.bw = clamp((avail - 72) / Math.max(total, 12), innerWidth <= 640 || isPhone() ? 56 : 72, 110);
     const W = total * L.bw + 72, H = L.secH + ls.length * L.laneH;
     const labels = $('#arrLabels'), tl = $('#arrTl');
     labels.innerHTML = '<div class="head"></div>'; tl.innerHTML = '';
@@ -420,7 +423,7 @@
     const add = (cls, style, html = '') => { const e = document.createElement('div'); e.className = cls; for (const [k, v] of Object.entries(style)) k.startsWith('--') ? e.style.setProperty(k, v) : (e.style[k] = v); e.innerHTML = html; tl.appendChild(e); return e; };
     add('sec-row', { width: W + 'px' });
     song.sections.forEach((s, i) => {
-      const e = add('sec' + (sel && sel.type === 'section' && sel.sec === s.id ? ' selected' : ''), { left: st[i] * L.bw + 'px', width: s.bars * L.bw + 'px' }, icon('grip') + `<span>${s.name}</span>`);
+      const e = add('sec' + (sel && sel.type === 'section' && sel.sec === s.id ? ' selected' : ''), { left: st[i] * L.bw + 'px', width: s.bars * L.bw + 'px' }, `<span class="grip">${icon('grip')}</span><span>${s.name}</span>`);
       e.dataset.sec = s.id;
       if (anim === 'arrange' && s.role !== 'rec') e.classList.add('enter');
     });
@@ -474,18 +477,55 @@
     }
     add('playhead', { left: playhead * L.bw / 4 + 'px' }).id = 'arrPlayhead';
     $('#editorHint').hidden = !!sel;
+    scroll.scrollLeft = keepScroll;
+    updateBar();
   }
   const sweepFix = document.createElement('style');
   sweepFix.textContent = '.sweep{animation-name:sweepPx}@keyframes sweepPx{from{left:0;opacity:1}95%{opacity:1}to{left:var(--w);opacity:0}}';
   document.head.appendChild(sweepFix);
 
   /* ---------------- workspace: arrangement interaction ---------------- */
+  // press, then: moved more than 5px = drag (start / move / end), released in place = click. A cancelled pointer (the
+  // browser took over to scroll) is never a click.
   function gesture(e, h) {
     const x0 = e.clientX, y0 = e.clientY; let drag = false;
     const mv = ev => { if (!drag && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 5) { drag = true; h.start && h.start(ev); } if (drag && h.move) h.move(ev); };
-    const up = ev => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); removeEventListener('pointercancel', up); if (drag) h.end && h.end(ev); else h.click && h.click(ev); };
+    const up = ev => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); removeEventListener('pointercancel', up); if (drag) h.end && h.end(ev); else if (ev.type === 'pointerup') h.click && h.click(ev); };
     addEventListener('pointermove', mv); addEventListener('pointerup', up); addEventListener('pointercancel', up);
   }
+  // touch / pen on a section bar: hold 400ms without moving = reorder (h.hold), move first = pan (h.pan), tap = click
+  function holdGesture(e, h) {
+    const x0 = e.clientX, y0 = e.clientY; let mode = null, last = e;
+    const timer = setTimeout(() => { if (mode) return; mode = 'hold'; if (navigator.vibrate) navigator.vibrate(10); h.hold.start(last); }, 400);
+    const mv = ev => {
+      last = ev;
+      if (!mode && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 5) { mode = 'pan'; clearTimeout(timer); h.pan.start(ev); }
+      if (mode === 'pan') h.pan.move(ev); else if (mode === 'hold') h.hold.move(ev);
+    };
+    const up = ev => {
+      clearTimeout(timer); removeEventListener('pointermove', mv); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+      if (mode === 'hold') h.hold.end(ev); else if (mode === 'pan') h.pan.end && h.pan.end(ev); else if (ev.type === 'pointerup') h.click(ev);
+    };
+    addEventListener('pointermove', mv); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  }
+  // while dragging near the left / right 40px of a scroller, keep scrolling it; onTick re-applies the drag at the new offset
+  function edgeScroll(sc, onTick) {
+    let x = null, raf = requestAnimationFrame(function loop() {
+      raf = requestAnimationFrame(loop);
+      if (x === null) return;
+      const r = sc.getBoundingClientRect(); let v = 0;
+      if (x < r.left + 40) v = -Math.ceil((r.left + 40 - x) / 4); else if (x > r.right - 40) v = Math.ceil((x - r.right + 40) / 4);
+      if (!v) return;
+      const before = sc.scrollLeft; sc.scrollLeft += v; if (sc.scrollLeft !== before) onTick();
+    });
+    return { at(cx) { x = cx; }, stop() { cancelAnimationFrame(raf); } };
+  }
+  // panning the timeline by dragging a section bar
+  function panner(e) {
+    const sc = $('#arrScroll'), x0 = e.clientX, sl0 = sc.scrollLeft;
+    return { start() { dragging = true; }, move(ev) { sc.scrollLeft = sl0 - (ev.clientX - x0); }, end() { dragging = false; } };
+  }
+  let dragging = false;
   function makeGhost(el, e) {
     const r = el.getBoundingClientRect(), g = el.cloneNode(true);
     g.classList.add('ghost'); g.classList.remove('selected'); g.style.left = r.left + 'px'; g.style.top = r.top + 'px'; g.style.width = r.width + 'px'; g.style.height = r.height + 'px';
@@ -499,10 +539,11 @@
     if (chord) {
       let ghost, target = null;
       return gesture(e, {
-        start: ev => { ghost = makeGhost(chord, ev); chord.classList.add('origin'); },
+        start: ev => { dragging = true; ghost = makeGhost(chord, ev); chord.classList.add('origin'); },
         move: ev => { ghost.place(ev); const under = document.elementFromPoint(ev.clientX, ev.clientY), c = under && under.closest('.chord'); if (target) target.classList.remove('target'); target = c && c !== chord ? c : null; if (target) target.classList.add('target'); },
         end: () => {
-          ghost.el.remove(); chord.classList.remove('origin');
+          dragging = false; ghost.el.remove(); chord.classList.remove('origin');
+
           if (!target) return renderArr();
           const a = findSec(chord.dataset.sec), b = findSec(target.dataset.sec), ia = +chord.dataset.bar, ib = +target.dataset.bar;
           commit(() => { const tmp = a.chords[ia]; a.chords[ia] = b.chords[ib]; b.chords[ib] = tmp; });
@@ -512,29 +553,54 @@
       });
     }
     if (sec) {
-      let ghost, mark, to = -1;
-      const from = song.sections.findIndex(s => s.id === sec.dataset.sec);
-      return gesture(e, {
-        start: ev => { ghost = makeGhost(sec, ev); sec.style.opacity = .35; mark = document.createElement('div'); mark.className = 'insert-mark'; $('#arrTl').appendChild(mark); },
-        move: ev => {
-          ghost.place(ev);
-          const x = ev.clientX - $('#arrTl').getBoundingClientRect().left, { a: st } = starts();
-          to = 0; song.sections.forEach((s, i) => { if (x > (st[i] + s.bars / 2) * L.bw) to = i + 1; });
-          const edge = to < song.sections.length ? st[to] : starts().total; mark.style.left = edge * L.bw - 1 + 'px';
-        },
+      // reorder: drag the grip with a mouse, or long-press with touch; the rest of the bar pans the timeline
+      let ghost, mark, to = -1, edge, last;
+      const from = song.sections.findIndex(s => s.id === sec.dataset.sec), sc = $('#arrScroll');
+      const place = ev => {
+        last = ev; ghost.place(ev); edge.at(ev.clientX);
+        const x = ev.clientX - $('#arrTl').getBoundingClientRect().left, { a: st, total } = starts();
+        to = 0; song.sections.forEach((s, i) => { if (x > (st[i] + s.bars / 2) * L.bw) to = i + 1; });
+        mark.style.left = (to < song.sections.length ? st[to] : total) * L.bw - 1 + 'px';
+      };
+      const reorder = {
+        start: ev => { dragging = true; ghost = makeGhost(sec, ev); sec.style.opacity = .35; mark = document.createElement('div'); mark.className = 'insert-mark'; $('#arrTl').appendChild(mark); edge = edgeScroll(sc, () => place(last)); place(ev); },
+        move: place,
         end: () => {
-          ghost.el.remove(); mark.remove(); sec.style.opacity = '';
+          dragging = false; edge.stop(); ghost.el.remove(); mark.remove(); sec.style.opacity = '';
           let j = to > from ? to - 1 : to;
           if (to < 0 || j === from) return renderArr();
           commit(() => { const [s] = song.sections.splice(from, 1); song.sections.splice(j, 0, s); });
         },
-        click: () => select({ type: 'section', sec: sec.dataset.sec }),
-      });
+      };
+      const click = () => select({ type: 'section', sec: sec.dataset.sec });
+      if (e.pointerType !== 'mouse') return holdGesture(e, { hold: reorder, pan: panner(e), click });
+      return gesture(e, e.target.closest('.grip') ? { ...reorder, click } : { ...panner(e), click });
     }
     if (clip) return gesture(e, { click: () => select({ type: clip.dataset.kind, sec: clip.dataset.sec }) });
     gesture(e, { click: ev => { const x = ev.clientX - $('#arrTl').getBoundingClientRect().left; seek(clamp(Math.round(x / L.bw * 4), 0, starts().total * 4)); select(null); } });
   });
   function select(s) { sel = s; renderArr(); renderEditor(); }
+  // Shift + wheel scrolls the timeline sideways (trackpad sideways swipes stay native)
+  $('#arrScroll').addEventListener('wheel', e => { if (e.shiftKey && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); $('#arrScroll').scrollLeft += e.deltaY; } }, { passive: false });
+  $('#arrScroll').addEventListener('scroll', () => updateBar());
+  /* custom scrollbar under the timeline column (Figma 27): drag the thumb, click the track to jump a page */
+  function updateBar() {
+    const sc = $('#arrScroll'), bar = $('#arrBar'), need = sc.scrollWidth > sc.clientWidth + 1;
+    bar.hidden = !need; if (!need) return;
+    const tw = bar.querySelector('.track').clientWidth, w = Math.max(24, tw * sc.clientWidth / sc.scrollWidth), th = bar.querySelector('.thumb');
+    th.style.width = w + 'px'; th.style.left = (tw - w) * sc.scrollLeft / (sc.scrollWidth - sc.clientWidth) + 'px';
+  }
+  $('#arrBar').addEventListener('pointerdown', e => {
+    if (e.button) return;
+    const sc = $('#arrScroll'), th = e.target.closest('.thumb'), tw = $('#arrBar .track').clientWidth;
+    e.preventDefault();
+    if (!th) { const r = $('#arrBar .thumb').getBoundingClientRect(); sc.scrollLeft += (e.clientX < r.left ? -1 : 1) * sc.clientWidth * .9; return; }
+    const x0 = e.clientX, sl0 = sc.scrollLeft, k = (sc.scrollWidth - sc.clientWidth) / Math.max(1, tw - th.offsetWidth);
+    th.classList.add('active');
+    const mv = ev => { sc.scrollLeft = sl0 + (ev.clientX - x0) * k; };
+    const up = () => { th.classList.remove('active'); removeEventListener('pointermove', mv); removeEventListener('pointerup', up); removeEventListener('pointercancel', up); };
+    addEventListener('pointermove', mv); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  });
 
   /* ---------------- editor ---------------- */
   let pr = null; // piano-roll state

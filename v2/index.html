@@ -138,11 +138,19 @@ svg { display: block; }
 .lane-label .mute { border: 0; background: none; padding: 4px; cursor: pointer; color: var(--muted); display: grid; }
 .lane-label .mute svg { width: 15px; height: 15px; }
 .lane-label.muted .name, .lane-label.muted .dot { opacity: .35; }
-.arr-scroll { overflow-x: auto; overflow-y: hidden; position: relative; scrollbar-width: thin; }
+.arr-scroll { overflow-x: auto; overflow-y: hidden; position: relative; scrollbar-width: none; }
+.arr-scroll::-webkit-scrollbar { display: none; }
+.arr-bar { grid-column: 2; height: 14px; padding: 4px 8px; }
+.arr-bar .track { position: relative; height: 6px; border-radius: 3px; background: var(--sunken); cursor: pointer; touch-action: none; }
+.arr-bar .thumb { position: absolute; top: 0; height: 6px; border-radius: 3px; background: var(--trace); cursor: grab; }
+.arr-bar .thumb.active { cursor: grabbing; }
+.arr-bar .thumb::before { content: ""; position: absolute; inset: -6px 0; }
 .arr-tl { position: relative; }
 .sec-row { position: absolute; left: 0; right: 0; top: 0; height: 32px; background: var(--sunken); }
-.sec { position: absolute; top: 0; height: 32px; display: flex; align-items: center; gap: 4px; padding-left: 6px; font-size: 12px; font-weight: 500; color: var(--muted); border-left: 1px solid var(--line); cursor: grab; user-select: none; touch-action: none; white-space: nowrap; overflow: hidden; }
+.sec { position: absolute; top: 0; height: 32px; display: flex; align-items: center; gap: 1px; padding-left: 1px; font-size: 12px; font-weight: 500; color: var(--muted); border-left: 1px solid var(--line); cursor: pointer; user-select: none; touch-action: none; white-space: nowrap; overflow: hidden; }
+.sec .grip { width: 20px; height: 32px; display: grid; place-items: center; flex: none; cursor: grab; }
 .sec svg { width: 14px; height: 14px; color: var(--trace); flex: none; }
+
 .sec.selected { background: var(--accent-soft); color: var(--accent); }
 .sec.enter { animation: secIn .35s cubic-bezier(.3, .7, .3, 1) both; }
 @keyframes secIn { from { clip-path: inset(0 50% 0 50%); opacity: 0; } }
@@ -363,6 +371,7 @@ a.pill { text-decoration: none; justify-content: center; }
   <div class="card arr" id="arr">
     <div class="arr-labels" id="arrLabels"></div>
     <div class="arr-scroll" id="arrScroll"><div class="arr-tl" id="arrTl"></div></div>
+    <div class="arr-bar" id="arrBar" hidden><div class="track"><div class="thumb"></div></div></div>
   </div>
   <div class="editor-hint" id="editorHint">点击段落来编辑</div>
   <div class="card editor" id="editor" hidden>

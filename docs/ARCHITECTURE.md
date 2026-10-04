@@ -95,7 +95,7 @@ Section = {
 | home | 节拍器、速度、上传、语言 |
 | recording | `startCapture(opts)` 是**通用录音器**，录音页和添加段落弹窗共用（`opts.compact` 用于弹窗）；`pumpRec`（节拍器和伴奏调度）、`liveLoop`、`drawLive`、`stopCapture`（含节拍器回声校准）、`analyzeTake`、`newSong`、`startMain/stopMain` |
 | workspace: layout | `L`（几何：`secH`、`laneH`、`bw` 每小节像素）、`lanes()`、`starts()`、`renderWork()`、`renderArr(anim)` |
-| workspace: arrangement interaction | `gesture(e, {start, move, end, click})`：按下后移动超过 5px 算拖动，否则算点击；`makeGhost()`；时间线上 `pointerdown` 的事件委托 |
+| workspace: arrangement interaction | `gesture(e, {start, move, end, click})`：按下后移动超过 5px 算拖动，否则算点击（pointercancel 不算点击）；`holdGesture()`（触摸长按）；`edgeScroll()`（拖到边缘自动滚动）；`panner()`；`makeGhost()`；时间线上 `pointerdown` 的事件委托；自定义滚动条 `updateBar()` |
 | editor | `renderEditor()`、钢琴卷帘（状态在 `pr`）、`buildHitGrid`、`buildChordPicker` |
 | playback | `startPlay` / `pump` / `frame` / `stopPlay` / `refreshPlayer` / `seek`。每次播放新建一个 bus 增益节点，停止时把它淡出 |
 | toolbar | 编曲按钮（过渡动画计时）、风格、调、速度 |
@@ -152,6 +152,8 @@ Section = {
 | `dsp.js` `transcribe` | 重新起音 | 能量 > 前 2–8 帧最小值的 2.2 倍，**而且**比 2 帧前高 40%（还在上升） | 第二个条件避免把一个音的起音尾巴当成新音 |
 | `dsp.js` `transcribe` | 起点回溯 | 新音的起点往前移到能量开始上升的地方（最多 8 帧） | 音高要几帧才稳定 |
 | `dsp.js` `estimateTempo` | 速度范围 | 60–170 BPM，偏好以 100 为中心（σ = 0.6 个八度） | — |
+| `app.js` `renderArr` | 每小节宽度 `L.bw` | `clamp((可用宽度 − 72) / max(小节数, 12), MIN, 110)`，`MIN` 电脑 72、手机（宽度 ≤ 640 或横屏手机）56 | 超出部分横向滚动 |
+| `app.js` `holdGesture` | 长按换顺序 | 400ms，移动 ≤ 5px | 只用于触摸和笔 |
 | `synth.js` `chain` | 混音 | 输入增益 0.55，限幅器 −8 dB / 16:1，混响 1.1 秒、湿声 0.18 | 峰值约 0.9 |
 
 ## 7. 已知限制和待办
