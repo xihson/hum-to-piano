@@ -230,22 +230,23 @@
   function drawLive(R) {
     const cv = R.opts.canvas, box = cv.parentElement, W = box.clientWidth, H = box.clientHeight; if (!W || !H) return;
     const g = setup(cv, W, H), now = R.now, compact = R.opts.compact, pps = compact ? 90 : 110, cx = W / 2, X = t => cx - (now - t) * pps;
-    const hitsH = compact ? 0 : 88, mh = H - hitsH;
+    // two drum rows under the pitch area; in the compact view they sit above the record button strip (Figma 26)
+    const mh = compact ? H - 101 : H - 88, rowH = compact ? 26 : 44;
     g.clearRect(0, 0, W, H);
     g.fillStyle = css('--line');
     const beat0 = R.firstCtx === null ? 0 : R.beat0Ctx - R.firstCtx;
     if (R.opts.metronome) { const k0 = Math.floor((now - cx / pps - beat0) / R.spb), k1 = Math.ceil((now + cx / pps - beat0) / R.spb); for (let k = k0; k <= k1; k++) { const x = X(beat0 + k * R.spb); g.globalAlpha = k % 4 ? .45 : 1; g.fillRect(Math.round(x), 0, 1, H); } g.globalAlpha = 1; }
     else { for (let s = Math.floor(now - cx / pps); s <= now + cx / pps; s++) { g.globalAlpha = .5; g.fillRect(Math.round(X(s)), 0, 1, H); } g.globalAlpha = 1; }
-    if (!compact) { g.fillRect(0, mh, W, 1); g.fillRect(0, mh + 44, W, 1); }
+    g.fillRect(0, mh, W, 1); g.fillRect(0, mh + rowH, W, 1);
     const pts = R.live.pitch.filter(p => p.t >= now - cx / pps - .1), v = pts.filter(p => !isNaN(p.m)).map(p => p.m);
     if (v.length) { let lo = Math.floor(Math.min(...v)) - 3, hi = Math.ceil(Math.max(...v)) + 3; while (hi - lo < 14) { lo--; hi++; } R.lo += (lo - R.lo) * .08; R.hi += (hi - R.hi) * .08; }
-    const Y = m => 12 + (R.hi - m) / (R.hi - R.lo) * (mh - (compact ? 40 : 24));
+    const Y = m => 12 + (R.hi - m) / (R.hi - R.lo) * (mh - 24);
     g.strokeStyle = css(R.opts.color || '--accent'); g.lineWidth = 2.5; g.lineJoin = g.lineCap = 'round'; g.beginPath();
     let pen = false; for (const p of pts) { if (isNaN(p.m)) { pen = false; continue; } pen ? g.lineTo(X(p.t), Y(p.m)) : g.moveTo(X(p.t), Y(p.m)); pen = true; } g.stroke();
     const last = pts[pts.length - 1];
     if (last && !isNaN(last.m)) { g.fillStyle = css(R.opts.color || '--accent'); g.beginPath(); g.arc(cx, Y(last.m), 6, 0, 7); g.fill(); }
     g.fillStyle = css('--hits');
-    for (const h of R.live.hits) { const x = X(h.t); if (x < -10 || x > cx + 10) continue; const big = h.k === 'clap', y = compact ? (big ? H - 30 : H - 14) : (big ? mh + 22 : mh + 66); g.beginPath(); g.arc(x, y, big ? 7 : 4.5, 0, 7); g.fill(); }
+    for (const h of R.live.hits) { const x = X(h.t); if (x < -10 || x > cx + 10) continue; const big = h.k === 'clap', y = big ? mh + rowH / 2 : mh + rowH * 1.5; g.beginPath(); g.arc(x, y, big ? 7 : 4.5, 0, 7); g.fill(); }
     g.fillStyle = css('--ink'); g.fillRect(cx - 1, 0, 2, H);
   }
   function goertzelPeak(x, sr, t0, t1, freqs) {
@@ -461,7 +462,7 @@
       }
     });
     const tile = add('add-sec', { left: total * L.bw + 10 + 'px', top: '7px', height: H - 14 + 'px' }, icon('plus') + '<span>段落</span>');
-    tile.addEventListener('click', openAdd);
+    tile.addEventListener('click', () => openAdd());
     if ((anim === 'arrange' || anim === 'style') && firstAuto >= 0) {
       const t = L.secH + firstAuto * L.laneH, h = (ls.length - firstAuto) * L.laneH;
       add('wipe', { top: t + 'px', height: h + 'px', width: total * L.bw + 'px' });
@@ -801,29 +802,43 @@
     el.innerHTML = '';
     for (const [v, lab] of items) { const b = document.createElement('button'); b.textContent = lab; b.setAttribute('aria-pressed', v === val); b.addEventListener('click', () => { el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); onPick(v); }); el.appendChild(b); }
   }
-  function openAdd() {
+  /* opts.insertAt: section index to insert before (from the hover "+" between sections); default is before the outro. */
+  function openAdd(opts = {}) {
     stopPlay();
-    addState = { name: song.sections.some(s => s.name === '主歌') ? '副歌' : '主歌', inst: 'piano', backing: true, rec: null, res: null };
+    addState = { name: song.sections.some(s => s.name === '主歌') ? '副歌' : '主歌', inst: 'piano', backing: true, metronome: true, bpm: song.bpm, insertAt: opts.insertAt ?? null, rec: null, res: null };
     segInit($('#addName'), ADD_NAMES.map(n => [n, n]), addState.name, v => addState.name = v);
     segInit($('#addInst'), Arrange.MELODY_INSTS, addState.inst, v => addState.inst = v);
     $('#addBacking').setAttribute('aria-checked', 'true');
-    $('#addOk').disabled = true; $('#addNote').textContent = ''; $('#addTimerWrap').hidden = true;
+    $('#addOk').disabled = true; $('#addNote').textContent = ''; $('#addNote').className = 'note'; $('#addBeats').hidden = true; $('#addTimerWrap').hidden = true;
     $('#addRec').innerHTML = icon('mic'); $('#addRec').setAttribute('aria-label', '开始录音');
-    setup($('#addCv'), $('#addArea').clientWidth || 600, 170);
+    syncAddBeat();
     $('#addModal').hidden = false;
+    setup($('#addCv'), $('#addArea').clientWidth || 600, $('#addArea').clientHeight || 200);
   }
+  // 节拍 row: metronome on/off and the recording tempo (only for this take; song.bpm is not changed)
+  function syncAddBeat() {
+    const A = addState; if (!A) return;
+    $('#addMetro').setAttribute('aria-pressed', A.metronome);
+    $('#addBpmRow').hidden = !A.metronome; $('#addBpmOut').textContent = A.bpm;
+    $('#addBackingWrap').hidden = !A.metronome || !song.arranged;
+  }
+  $('#addMetro').addEventListener('click', () => { if (!addState || addState.rec) return; addState.metronome = !addState.metronome; syncAddBeat(); });
+  $('#addBpmDown').addEventListener('click', () => { if (!addState || addState.rec) return; addState.bpm = clamp(addState.bpm - 5, 40, 240); syncAddBeat(); });
+  $('#addBpmUp').addEventListener('click', () => { if (!addState || addState.rec) return; addState.bpm = clamp(addState.bpm + 5, 40, 240); syncAddBeat(); });
   $('#addBacking').addEventListener('click', e => { const on = e.currentTarget.getAttribute('aria-checked') !== 'true'; e.currentTarget.setAttribute('aria-checked', on); addState.backing = on; });
   async function startAddRec() {
     const A = addState; if (!A || A.rec) return;
     let backing = null;
-    if (A.backing && song.arranged) {
+    if (A.metronome && A.backing && song.arranged) {
       const base = song.sections.find(s => s.role === 'rec' && s.chords) || song.sections.find(s => s.chords);
-      if (base) { const c = Arrange.compile({ ...song, sections: [{ ...base, melody: null, hits: [] }], mute: {} }); backing = { events: c.events.filter(e => e.lane !== 'drums' || e.drum === 'kick'), loop: c.duration }; }
+      if (base) { const c = Arrange.compile({ ...song, bpm: A.bpm, sections: [{ ...base, melody: null, hits: [] }], mute: {} }); backing = { events: c.events.filter(e => e.lane !== 'drums' || e.drum === 'kick'), loop: c.duration }; }
     }
+    const note = $('#addNote'); note.textContent = A.metronome ? '' : '3'; note.className = 'note' + (A.metronome ? '' : ' count');
+    $('#addBeats').querySelectorAll('i').forEach(d => d.classList.remove('on'));
     $('#addOk').disabled = true; A.res = null;
     $('#addTimerWrap').hidden = false;
     $('#addRec').innerHTML = icon('stop'); $('#addRec').setAttribute('aria-label', '停止');
-    A.rec = await startCapture({ canvas: $('#addCv'), noteEl: $('#addNote'), timerEl: $('#addTimer'), metronome: true, bpm: song.bpm, backing, compact: true, color: instColor(A.inst) });
+    A.rec = await startCapture({ canvas: $('#addCv'), noteEl: note, beatEl: $('#addBeats'), timerEl: $('#addTimer'), metronome: A.metronome, bpm: A.bpm, backing, compact: true, color: instColor(A.inst) });
     if (!A.rec) { $('#addRec').innerHTML = icon('mic'); $('#addTimerWrap').hidden = true; }
   }
   async function stopAddRec() {
@@ -836,7 +851,7 @@
     if (!res) { toast('没有听出旋律。离麦克风近一点再试。'); return; }
     A.res = res; A.buffer = out.buffer; $('#addOk').disabled = false;
     $('#addNote').classList.remove('count');
-    $('#addNote').textContent = '';
+    $('#addNote').textContent = ''; $('#addBeats').hidden = true;
   }
   $('#addRec').addEventListener('click', () => addState && (addState.rec ? stopAddRec() : startAddRec()));
   async function closeAdd() { if (addState && addState.rec) { const R = addState.rec; addState.rec = null; await stopCapture(R); } addState = null; $('#addModal').hidden = true; }
@@ -846,7 +861,11 @@
     const take = 't' + Date.now(); takes.set(take, A.buffer);
     const s = { id: Arrange.uid(), name: A.name, role: 'rec', bars: A.res.bars, melody: A.res.notes.length ? { inst: A.inst, notes: A.res.notes } : null, hits: A.res.hits, chords: null, take };
     if (song.arranged) s.chords = Theory.harmonize(s.melody ? s.melody.notes : [], s.bars, song.key);
-    commit(() => { const out = song.sections.findIndex(x => x.role === 'outro'); song.sections.splice(out >= 0 ? out : song.sections.length, 0, s); });
+    commit(() => {
+      const out = song.sections.findIndex(x => x.role === 'outro');
+      song.sections.splice(A.insertAt !== null ? A.insertAt : out >= 0 ? out : song.sections.length, 0, s);
+    });
+
     closeAdd();
     select({ type: s.melody ? 'melody' : 'hits', sec: s.id });
   });
