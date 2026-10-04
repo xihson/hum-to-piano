@@ -198,9 +198,15 @@ svg { display: block; }
 .tool svg { width: 18px; height: 18px; }
 .ed-body { flex: 1; position: relative; min-height: 0; }
 .pr { position: absolute; inset: 0; }
-.pr-keys { position: absolute; left: 0; top: 0; }
+.pr-corner { position: absolute; left: 0; top: 0; width: 46px; height: 26px; border-bottom: 1px solid var(--line); }
+.pr-keys { position: absolute; left: 0; top: 26px; }
 .pr-scroll { position: absolute; left: 46px; right: 0; top: 0; bottom: 0; overflow-x: auto; overflow-y: hidden; }
+.pr-inner { position: relative; width: max-content; }
 .pr-scroll canvas { display: block; touch-action: none; }
+.pr-ruler { cursor: pointer; }
+.pr-ph { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); pointer-events: none; z-index: 2; }
+.pr-tag { top: 4px; z-index: 3; }
+
 .tip { position: absolute; z-index: 5; pointer-events: none; padding: 4px 10px; border-radius: 8px; background: var(--ink); color: var(--bg); font: 600 12px var(--font-num); white-space: nowrap; }
 .grid-ed { position: absolute; inset: 0; overflow: auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 14px; }
 .grid-row { display: flex; align-items: center; gap: 10px; }

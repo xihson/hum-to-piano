@@ -673,15 +673,23 @@
     for (const [id, lab] of Arrange.MELODY_INSTS) item(m, (id === s.melody.inst ? icon('check') : '<span style="width:16px"></span>') + lab, () => { closeMenu(); commit(() => { s.melody.inst = id; }); });
   }, 'left'); });
 
+  /* Piano roll (Figma 31): a ruler with bar numbers on top, keys on the left, the note grid scrolling sideways. The
+     playhead line and its handle are DOM elements inside the scrolled content; the handle sets the global playhead
+     (section start + beat in section) and stays within this section. */
+  const PR_RULER = 26;
   function buildPianoRoll(body, s) {
-    body.innerHTML = '<div class="pr"><canvas class="pr-keys"></canvas><div class="pr-scroll"><canvas></canvas></div></div>';
-    const wrap = body.querySelector('.pr'), keys = wrap.querySelector('.pr-keys'), scroll = wrap.querySelector('.pr-scroll'), cv = scroll.querySelector('canvas');
+    body.innerHTML = `<div class="pr"><div class="pr-corner"></div><canvas class="pr-keys"></canvas><div class="pr-scroll"><div class="pr-inner"><canvas class="pr-ruler"></canvas><canvas class="pr-grid"></canvas><div class="pr-ph"></div><div class="ph-tag pr-tag">${PH_TAG}</div></div></div></div>`;
+    const wrap = body.querySelector('.pr'), keys = wrap.querySelector('.pr-keys'), scroll = wrap.querySelector('.pr-scroll'), cv = wrap.querySelector('.pr-grid');
     const notes = s.melody.notes, ps = notes.map(n => n.p);
     let lo = (ps.length ? Math.min(...ps) : 60) - 4, hi = (ps.length ? Math.max(...ps) : 72) + 4; while (hi - lo < 16) { lo--; hi++; }
-    const beats = s.bars * 4, H = body.clientHeight, ppb = Math.max(26, scroll.clientWidth / beats), W = beats * ppb, rh = H / (hi - lo + 1);
-    pr = { s, lo, hi, ppb, rh, W, H, cv, keys, scroll, beats, selNote: -1, drag: null };
-    drawPR();
+    const beats = s.bars * 4, H = body.clientHeight - PR_RULER, ppb = Math.max(26, scroll.clientWidth / beats), W = beats * ppb, rh = H / (hi - lo + 1);
+    const st = starts().a[song.sections.indexOf(s)] * 4;
+    pr = { s, st, lo, hi, ppb, rh, W, H, cv, keys, scroll, inner: wrap.querySelector('.pr-inner'), ruler: wrap.querySelector('.pr-ruler'), ph: wrap.querySelector('.pr-ph'), tag: wrap.querySelector('.pr-tag'), beats, selNote: -1, drag: null };
+    drawPR(); drawRuler(); placePRHead();
     cv.addEventListener('pointerdown', prDown);
+    const beatAt = x => pr.st + (x - pr.inner.getBoundingClientRect().left) / pr.ppb;
+    pr.ruler.addEventListener('pointerdown', e => { if (e.button) return; seek(clamp(Math.round(beatAt(e.clientX) * 4) / 4, pr.st, pr.st + pr.beats)); });
+    pr.tag.addEventListener('pointerdown', e => { if (e.button) return; dragPlayhead(e, { sc: pr.scroll, beatAt, lo: pr.st, hi: pr.st + pr.beats, tag: () => pr.tag, follow: true }); });
     cv.addEventListener('dblclick', e => {
       const { b, p } = prPos(e); if (prHit(e) >= 0) return;
       const n = { p, s: clamp(Math.floor(b * 4) / 4, 0, pr.beats - 1), d: 1 };
@@ -731,12 +739,26 @@
       if (i === pr.selNote) { g.strokeStyle = css('--ink'); g.lineWidth = 2; rr(g, x - 1, y - 1, w + 2, h + 2, 6); g.stroke(); g.fillStyle = css('--on-accent'); g.globalAlpha = .9; rr(g, x + w - 6, y + 4, 3, h - 8, 1.5); g.fill(); g.globalAlpha = 1; }
       if (w > 26 && h >= 12) { g.fillStyle = css('--on-accent'); g.fillText(Theory.noteName(n.p), x + 7, y + h / 2 + .5); }
     });
-    const st = starts().a[song.sections.indexOf(s)] * 4, rel = playhead - st;
-    if (rel >= 0 && rel <= beats && (player || playhead > 0)) { g.fillStyle = css('--ink'); g.fillRect(rel * ppb - 1, 0, 2, H); }
     const k = setup(keys, 46, H);
     k.fillStyle = css('--surface'); k.fillRect(0, 0, 46, H); k.font = '500 10px ' + css('--font-num'); k.textBaseline = 'middle';
     for (let m = lo; m <= hi; m++) { if ([1, 3, 6, 8, 10].includes(Theory.mod12(m))) { k.fillStyle = css('--ink'); k.globalAlpha = .85; rr(k, -4, (hi - m) * rh + 1, 32, rh - 2, 3); k.fill(); k.globalAlpha = 1; } else if (Theory.mod12(m) === 0) { k.fillStyle = css('--muted'); k.fillText(Theory.noteName(m), 6, (hi - m) * rh + rh / 2); } }
     k.fillStyle = css('--line'); k.fillRect(45, 0, 1, H);
+  }
+  function drawRuler() {
+    const { ruler, W, ppb, s } = pr, g = setup(ruler, W, PR_RULER);
+    g.fillStyle = css('--sunken'); g.fillRect(0, 0, W, PR_RULER);
+    g.fillStyle = css('--line'); g.fillRect(0, PR_RULER - 1, W, 1);
+    g.fillStyle = css('--muted'); g.font = '500 11px ' + css('--font-num'); g.textBaseline = 'middle';
+    for (let b = 0; b < s.bars; b++) g.fillText(String(b + 1), b * 4 * ppb + 8, PR_RULER / 2);
+  }
+  // shown only while the playhead is inside this section; while playing, the roll scrolls to keep it in view
+  function placePRHead() {
+    if (!pr) return;
+    const rel = playhead - pr.st, on = rel >= 0 && rel <= pr.beats, x = rel * pr.ppb;
+    pr.ph.hidden = pr.tag.hidden = !on; if (!on) return;
+    pr.ph.style.left = x - 1 + 'px'; pr.tag.style.left = x - 7 + 'px';
+    const sc = pr.scroll;
+    if (player && (x > sc.scrollLeft + sc.clientWidth - 30 || x < sc.scrollLeft)) sc.scrollLeft = Math.max(0, x - 30);
   }
   function buildHitGrid(body, s) {
     const wrap = document.createElement('div'); wrap.className = 'grid-ed';
@@ -805,11 +827,14 @@
     if (x > sc.scrollLeft + sc.clientWidth - 60 || x < sc.scrollLeft) sc.scrollLeft = Math.max(0, x - 60);
     P.raf = requestAnimationFrame(frame);
   }
-  function movePlayhead() {
+  // follow: also scroll the arrangement so the playhead stays visible (when it is moved from the piano roll)
+  function movePlayhead(follow) {
     const x = playhead * L.bw / 4, ph = $('#arrPlayhead'), tag = $('#arrTag');
     if (ph) ph.style.left = x + 'px'; if (tag) tag.style.left = x - 7 + 'px';
-    if (pr) drawPR(); updateTime();
+    if (follow) { const sc = $('#arrScroll'); if (x < sc.scrollLeft + 20 || x > sc.scrollLeft + sc.clientWidth - 20) sc.scrollLeft = x - sc.clientWidth / 2; }
+    placePRHead(); updateTime();
   }
+
 
   function stopPlay() {
     const P = player; if (!P) return; player = null;
