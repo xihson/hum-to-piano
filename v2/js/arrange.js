@@ -44,9 +44,9 @@ const Arrange = (() => {
   }
 
   function seventh(name, key) {
-    const c = Theory.parse(name), deg = Theory.mod12(c.root - key.tonic);
-    if (c.q === 'm') return name + '7';
-    if (c.q === '') return name + (deg === 7 ? '7' : 'maj7');
+    const [ch, slash] = name.split('/'), c = Theory.parse(ch), deg = Theory.mod12(c.root - key.tonic), tail = slash ? '/' + slash : '';
+    if (c.q === 'm') return ch + '7' + tail;
+    if (c.q === '') return ch + (deg === 7 ? '7' : 'maj7') + tail;
     return name;
   }
   function chordEvents(st, name, bar0, beats, role, key, push) {
@@ -58,12 +58,14 @@ const Arrange = (() => {
       case 'arp4': { const seq = [v[0], v[1], v[2], v[1]]; for (let i = 0; i < beats; i++) at(i, seq[i % 4] + 12, 1.5); break; }
       case 'pulse': for (const [b, d] of [[0, 1.5], [1.5, 1], [2.5, 1.5]]) if (b < beats) v.forEach(m => at(b, m, d, V * (b ? .85 : 1))); break;
       case 'hold': v.forEach((m, i) => at(i * .03, m, beats - .1)); break;
-      case 'power8': { const r = Theory.bassNote(nm, 40) ; for (let i = 0; i < beats * 2; i++) at(i / 2, r, .42, V * (i % 2 ? .8 : 1)); break; }
+      case 'power8': { let r = Theory.bassNote(nm, 36); if (r < 40) r += 12; /* E2–D#3 */ for (let i = 0; i < beats * 2; i++) at(i / 2, r, .42, V * (i % 2 ? .8 : 1)); break; }
       case 'offbeat': for (let i = 0; i < beats; i++) v.forEach(m => at(i + .5, m + 12, .3)); break;
     }
   }
   function bassEvents(st, name, bar0, beats, push) {
-    const r = Theory.bassNote(name), fifth = r + 7, V = st.v;
+    // r is the bass note (the slash note of "F/A"); fifth is the chord root's fifth, the first one above r
+    const r = Theory.bassNote(name), fifth = r + (Theory.mod12(Theory.parse(name).root + 7 - r) || 12), V = st.v;
+
     const at = (b, m, d) => { if (b < beats) push(bar0 + b, m, d, V); };
     switch (st.pat) {
       case 'whole': at(0, st.inst === 'piano' ? r + 12 : r, beats); break;

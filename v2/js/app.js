@@ -824,17 +824,34 @@
     }
     body.appendChild(wrap);
   }
-  function previewChord(name) { const S = Synth.ctx(), t = S.c.currentTime + .01; for (const m of Theory.voicing(name)) Synth.play(S, S.input, { inst: 'piano', m, t, d: .9, v: .5 }); }
+  function previewChord(name) {
+    const S = Synth.ctx(), t = S.c.currentTime + .01;
+    for (const m of Theory.voicing(name)) Synth.play(S, S.input, { inst: 'piano', m, t, d: .9, v: .5 });
+    Synth.play(S, S.input, { inst: 'piano', m: Theory.bassNote(name), t, d: .9, v: .45 });
+  }
+  /* Chord editor (Figma 32): diatonic chords, extras, and a third row "低音" that picks the bass note among the chord's
+     tones. A non-root bass makes a slash chord ("F/A"); picking a chord in the first two rows resets it to the root. */
   function buildChordPicker(body, s, bar) {
     const wrap = document.createElement('div'); wrap.className = 'chords-ed';
-    const cur = s.chords[bar];
+    const cur = s.chords[bar], base = Theory.chordPart(cur), cp = Theory.parse(cur);
     const row1 = document.createElement('div'); row1.className = 'row';
-    for (const c of Theory.diatonic(song.key)) { const b = document.createElement('button'); b.className = 'cbtn' + (c.name === cur ? ' on' : ''); b.innerHTML = `${c.name}<small>${c.roman}</small>`; b.addEventListener('click', () => setChord(s, bar, c.name)); row1.appendChild(b); }
+    for (const c of Theory.diatonic(song.key)) { const b = document.createElement('button'); b.className = 'cbtn' + (c.name === base ? ' on' : ''); b.innerHTML = `${c.name}<small>${c.roman}</small>`; b.addEventListener('click', () => setChord(s, bar, c.name)); row1.appendChild(b); }
     const row2 = document.createElement('div'); row2.className = 'row';
-    for (const name of Theory.extras(song.key)) { const b = document.createElement('button'); b.className = 'cbtn sm' + (name === cur ? ' on' : ''); b.textContent = name; b.addEventListener('click', () => setChord(s, bar, name)); row2.appendChild(b); }
-    wrap.append(row1, row2); body.appendChild(wrap);
+    for (const name of Theory.extras(song.key)) { const b = document.createElement('button'); b.className = 'cbtn sm' + (name === base ? ' on' : ''); b.textContent = name; b.addEventListener('click', () => setChord(s, bar, name)); row2.appendChild(b); }
+    const row3 = document.createElement('div'); row3.className = 'row bass-row'; row3.innerHTML = '<span class="lbl">低音</span>';
+    const triad = ['', 'm', 'dim', 'aug'].includes(cp.q), roles = ['根音', '三音', '五音'], rootName = /^[A-G][#b]?/.exec(base)[0];
+    Theory.tones(base).forEach((pc, i) => {
+      const nm = pc === cp.root ? rootName : Theory.pcName(pc, song.key, rootName[1] === 'b'), name = pc === cp.root ? base : base + '/' + nm;
+      const b = document.createElement('button'); b.className = 'cbtn xs' + (pc === cp.bass ? ' on' : '');
+      b.innerHTML = nm + (triad ? `<small>${roles[i]}</small>` : '');
+      b.addEventListener('click', () => { previewChord(name); if (name !== cur) commit(() => { s.chords[bar] = name; }); });
+      row3.appendChild(b);
+    });
+    wrap.append(row1, row2, row3); body.appendChild(wrap);
   }
-  function setChord(s, bar, name) { previewChord(name); if (s.chords[bar] === name) return; commit(() => { s.chords[bar] = name; }); }
+  // a chord from the first two rows replaces the bar's chord; same chord again keeps the chosen bass
+  function setChord(s, bar, name) { const cur = s.chords[bar]; previewChord(Theory.chordPart(cur) === name ? cur : name); if (Theory.chordPart(cur) === name) return; commit(() => { s.chords[bar] = name; }); }
+
 
   /* ---------------- playback ---------------- */
   let player = null;

@@ -7,7 +7,7 @@ const Theory = (() => {
 
   // keys whose signature is written with flats
   const usesFlats = key => [5, 10, 3, 8, 1, 6].includes(key.mode === 'major' ? key.tonic : mod12(key.tonic + 3));
-  const pcName = (pc, key) => (key && usesFlats(key) ? FLAT : SHARP)[mod12(pc)];
+  const pcName = (pc, key, flat) => (flat || (key && usesFlats(key)) ? FLAT : SHARP)[mod12(pc)];
   const keyLabel = key => pcName(key.tonic, key) + (key.mode === 'major' ? ' 大调' : ' 小调');
 
   // Krumhansl–Kessler key profiles
@@ -36,12 +36,16 @@ const Theory = (() => {
 
   const INTERVALS = { '': [0, 4, 7], m: [0, 3, 7], dim: [0, 3, 6], aug: [0, 4, 8], '7': [0, 4, 7, 10], maj7: [0, 4, 7, 11], m7: [0, 3, 7, 10], sus4: [0, 5, 7], sus2: [0, 2, 7], m7b5: [0, 3, 6, 10] };
   const LETTER = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const letterPc = (l, acc) => mod12(LETTER[l] + (acc === '#' ? 1 : acc === 'b' ? -1 : 0));
+  /* "F/A" = F chord with A in the bass. Returns {root, q, bass}; bass = root when there is no slash. */
   function parse(name) {
-    const m = /^([A-G])([#b]?)(.*)$/.exec(name || '');
-    if (!m) return { root: 0, q: '' };
-    const root = mod12(LETTER[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0));
-    return { root, q: INTERVALS[m[3]] ? m[3] : '' };
+    const [chord, slash] = String(name || '').split('/');
+    const m = /^([A-G])([#b]?)(.*)$/.exec(chord);
+    if (!m) return { root: 0, q: '', bass: 0 };
+    const root = letterPc(m[1], m[2]), b = slash && /^([A-G])([#b]?)$/.exec(slash);
+    return { root, q: INTERVALS[m[3]] ? m[3] : '', bass: b ? letterPc(b[1], b[2]) : root };
   }
+  const chordPart = name => String(name || '').split('/')[0];
   const tones = name => { const c = parse(name); return INTERVALS[c.q].map(i => mod12(c.root + i)); };
   const make = (rootPc, q, key) => pcName(rootPc, key) + q;
 
@@ -123,7 +127,8 @@ const Theory = (() => {
     let root = base + c.root; if (c.root >= 7) root -= 12;
     return INTERVALS[c.q].map(i => root + 12 + i);
   }
-  const bassNote = (name, base = 36) => { const c = parse(name); let r = base + c.root; if (c.root >= 8) r -= 12; return r; };
+  const bassNote = (name, base = 36) => { const c = parse(name); let r = base + c.bass; if (c.bass >= 8) r -= 12; return r; };
 
-  return { noteName, pcName, keyLabel, detectKey, parse, tones, diatonic, extras, harmonize, introChords, outroChords, voicing, bassNote, mod12 };
+  return { noteName, pcName, keyLabel, detectKey, parse, chordPart, tones,
+ diatonic, extras, harmonize, introChords, outroChords, voicing, bassNote, mod12 };
 })();

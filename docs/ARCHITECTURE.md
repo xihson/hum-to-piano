@@ -66,7 +66,7 @@ Section = {
   bars: 4,                  // 每小节固定 4 拍（目前不支持 3/4 拍）
   melody: { inst: 'piano', notes: [{ p: 60, s: 0, d: 1 }] } | null,   // p = MIDI 音高，s/d = 段内起点和时值（拍）
   hits: [{ t: 1, k: 'clap' | 'snap' }],       // t = 段内拍子，按 16 分音符量化
-  chords: ['C', 'G', 'F', 'C'] | null,        // 每小节一个；编曲前为 null
+  chords: ['C', 'G', 'F/A', 'C'] | null,      // 每小节一个；编曲前为 null。斜线后是贝斯音（F/A = F 和弦、贝斯弹 A）
   take: 't1712345' | undefined                // 指向 takes 里的原始录音
 }
 ```
@@ -108,7 +108,7 @@ Section = {
 
 ## 4. 模块接口速查
 
-**Theory**：`noteName(midi)`、`keyLabel(key)`、`detectKey(notes)`（Krumhansl–Kessler）、`parse(chord)`、`tones(chord)`、`diatonic(key)` → `[{name, roman, degree}]`、`extras(key)`、`harmonize(notes, bars, key)`（每小节选一个调内三和弦，用 Viterbi 算法同时考虑旋律匹配和和弦进行）、`introChords/outroChords(key)`、`voicing(chord)`、`bassNote(chord)`。
+**Theory**：`noteName(midi)`、`pcName(pc, key, flat?)`、`keyLabel(key)`、`detectKey(notes)`（Krumhansl–Kessler）、`parse(chord)` → `{root, q, bass}`（`bass` 是斜线音，没有斜线时等于 `root`）、`chordPart(chord)`（去掉斜线）、`tones(chord)`、`diatonic(key)` → `[{name, roman, degree}]`、`extras(key)`、`harmonize(notes, bars, key)`（每小节选一个调内三和弦，用 Viterbi 算法同时考虑旋律匹配和和弦进行）、`introChords/outroChords(key)`、`voicing(chord)`（只看斜线前的和弦）、`bassNote(chord)`（用斜线音）。`harmonize`、`reharmonize` 的结果不带斜线。
 
 **DSP**：`yin()`、`toMono(buffer, sr)`、`pitchFrames(x22k)`、`transcribe(frames)` → `{notes:[{p,t,e}], trace, offset}`、`estimateTempo(onsets)` → `{bpm, t0}`、`toBeats(notes, hits, bpm, t0)`（`hits` 是 `[{t: 秒, k}]`）、`median()`。麦克风**不再识别拍手和响指**，鼓点只来自按键。
 
