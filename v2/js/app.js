@@ -1,4 +1,8 @@
-/* App: screens, recording, workspace rendering and interaction, playback, history, export. */
+/* App: screens, recording, workspace rendering and interaction, playback, history, export.
+   Section banners below ("---- recording ----" etc.) match the map in docs/ARCHITECTURE.md; every UI element
+   is traced to its DOM id and handler in docs/UX-WALKTHROUGH.md.
+   Rule of thumb: never mutate `song` directly from a UI handler — wrap the change in commit(fn) so it lands in
+   the undo history and the workspace re-renders. */
 (() => {
   const $ = s => document.querySelector(s);
   const fmt = s => { s = Math.max(0, s); return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); };
@@ -546,7 +550,7 @@
         tip.textContent = resize ? (n.d + ' 拍') : (n.p === orig.p ? Theory.noteName(n.p) : Theory.noteName(orig.p) + ' → ' + Theory.noteName(n.p));
         const ny = (pr.hi - n.p) * pr.rh, bodyR = $('#edBody').getBoundingClientRect(), cvR = pr.cv.getBoundingClientRect();
         tip.style.left = cvR.left - bodyR.left + n.s * pr.ppb + 'px'; tip.style.top = Math.max(2, cvR.top - bodyR.top + ny - 30) + 'px';
-        drawPR(); drawArrClipsLite();
+        drawPR(); // the arrangement preview refreshes on pointerup via afterChange()
       },
       end: () => {
         tip.remove();
@@ -554,7 +558,6 @@
       },
     });
   }
-  function drawArrClipsLite() { /* arrangement refresh is cheap enough to defer to pointerup */ }
   function drawPR() {
     if (!pr) return;
     const { s, lo, hi, ppb, rh, W, H, cv, keys, beats } = pr, g = setup(cv, W, H), color = css(instColor(s.melody.inst));
@@ -767,7 +770,7 @@
       const res = await analyzeTake(out.buffer, out.info);
       if (!res) { toast('没有听出旋律或拍手。再录一次试试。'); return; }
       A.res = res; A.buffer = out.buffer; $('#addOk').disabled = false;
-      $('#addNote').classList.remove('count'); $('#addNote').textContent = res.notes.length ? res.notes.length + '' : '';
+      $('#addNote').classList.remove('count');
       $('#addNote').textContent = '';
     }
   });

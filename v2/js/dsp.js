@@ -1,4 +1,6 @@
-/* Signal analysis: pitch (YIN), note segmentation, clap/snap onsets, tempo. */
+/* Signal analysis: pitch (YIN), note segmentation, clap/snap onsets, tempo.
+   Every tuning threshold is listed in docs/ARCHITECTURE.md ("Tuning constants") — change them there too.
+   Regression check: v2/dev/fixture.js + the snippet in docs/TESTING.md. */
 const DSP = (() => {
   const median = a => { if (!a.length) return NaN; const s = [...a].sort((p, q) => p - q), k = s.length >> 1; return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2; };
 
@@ -99,7 +101,6 @@ const DSP = (() => {
           re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti; const nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr; } }
     }
   }
-  const SNAP_CENTROID = 3300;
   function centroid(x, start, sr) {
     const N = 1024, re = new Float32Array(N), im = new Float32Array(N);
     for (let i = 0; i < N; i++) { const v = x[start + i] || 0; re[i] = v * (.5 - .5 * Math.cos(2 * Math.PI * i / (N - 1))); }

@@ -1,5 +1,7 @@
 /* Sound: instruments, drums and metronome, built from Web Audio primitives. Every voice takes a context
-   and a destination so the same code renders live and offline (WAV export). */
+   and a destination so the same code renders live and offline (WAV export).
+   Adding an instrument: write voice(S, dest, midi, t, dur, vel), register it in INSTRUMENTS below, then follow
+   the checklist in docs/ARCHITECTURE.md ("Add a melody instrument"). */
 const Synth = (() => {
   let live = null;
 

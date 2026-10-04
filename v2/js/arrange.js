@@ -4,6 +4,8 @@ const Arrange = (() => {
   const uid = () => 's' + (nextId++) + Math.random().toString(36).slice(2, 6);
   const clone = o => JSON.parse(JSON.stringify(o));
 
+  /* Styles. To add one: add an entry here (chord/bass patterns are the `case` names in chordEvents/bassEvents,
+     drums is a key of KITS or null), append its id to STYLE_ORDER, and add Suno words in sunoPrompt(). */
   const STYLES = {
     piano: { label: '纯钢琴', chord: { inst: 'piano', pat: 'arp', v: .34 }, bass: { inst: 'piano', pat: 'whole', v: .5 }, drums: null },
     pop: { label: '流行', chord: { inst: 'piano', pat: 'pulse', v: .36 }, bass: { inst: 'bass', pat: 'pop', v: .8 }, drums: 'pop' },
@@ -21,6 +23,7 @@ const Arrange = (() => {
     ballad: { kick: [0, 10], rim: [4, 12], hat: [0, 4, 8, 12], hatV: .4 },
     edm: { kick: [0, 4, 8, 12], clap: [4, 12], ohat: [2, 6, 10, 14], hat: [1, 3, 5, 7, 9, 11, 13, 15], hatV: .35 },
   };
+  // Melody instruments shown in the pickers. A new id also needs: Synth INSTRUMENTS, GM below, a CSS colour --i-<id>, Suno words.
   const MELODY_INSTS = [['piano', '钢琴'], ['epiano', '电钢琴'], ['guitar', '吉他'], ['strings', '弦乐'], ['musicbox', '八音盒'], ['synth', '合成器']];
   const instLabel = id => (MELODY_INSTS.find(x => x[0] === id) || [, id])[1];
 
