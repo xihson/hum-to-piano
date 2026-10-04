@@ -18,6 +18,7 @@
 ```
 index.html          v1：哼唱转钢琴（单文件，已完成，保持不动）
 v2/index.html       v2 的页面结构和全部 CSS（颜色变量在顶部）
+v2/js/i18n.js       界面文案（中 / 英 / 德），最先加载
 v2/js/theory.js     乐理
 v2/js/dsp.js        信号分析
 v2/js/synth.js      发声
@@ -36,6 +37,15 @@ docs/               上面列出的文档
 - 改完 JS 后运行 `node --check`，再用 `docs/TESTING.md` 里的合成录音回归检查一遍。
 - 提交信息用英文，一次改动一个提交。push 到 `main` 就会发布到 GitHub Pages。**用户希望 agent 自己把部署做完**：代码确认并测试过后直接 push，再用 `docs/TESTING.md` 里的命令确认构建完成；只有需要用户介入时才停下，并说清楚怎么做，比如要 token、要在网页后台点击、要加 DNS 记录。
 - 新的决定写进 `docs/DECISIONS.md`；界面或交互变了，同步更新 `docs/UX-WALKTHROUGH.md`。
+- 用户会在新 session 里直接说要改什么。小的交互修改（不涉及新界面）用户通常不要求先画 Figma，拿不准就问。
+
+## 容易踩的坑（前几个 session 总结的）
+
+- **改了 JS 就改 `v2/index.html` 里脚本的 `?v=` 版本号**（六个脚本用同一个值）。GitHub Pages 缓存 10 分钟，不改的话用户会拿到新旧混用的文件；本地内置浏览器也会缓存，测试前先 `fetch(文件, { cache: 'reload' })` 再刷新。
+- **新加的文案三种语言都要写**（`v2/js/i18n.js` 的 `STRINGS`），不要在 `app.js` 或 `index.html` 里直接写中文。段落名在数据里存中文，显示时经 `secName()` 翻译。
+- **行尾**：`v2/` 和 `docs/` 里的文件大多是 CRLF（`synth.js` 是 LF）。用脚本改文件时按字节读写、保持原来的行尾，不然 diff 会变成整个文件。提交前看一眼 `git diff --stat` 是否只有真实改动。
+- `app.js` 里有个变量叫 `screen`（当前屏幕），会遮住 `window.screen`，要用屏幕尺寸时写 `window.screen`。
+- 内置浏览器面板不在前台时页面不出帧，`requestAnimationFrame` 和 CSS 过渡都会停住，截图可能是旧的。先截一张图把它唤醒，再用 JS 读状态来判断，别只看截图。没有麦克风时的测法见 `docs/TESTING.md`。
 
 ## 运行
 

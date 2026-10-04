@@ -614,13 +614,13 @@
       return gesture(e, {
         start: ev => { dragging = true; ghost = makeGhost(chord, ev); chord.classList.add('origin'); },
         move: ev => { ghost.place(ev); const under = document.elementFromPoint(ev.clientX, ev.clientY), c = under && under.closest('.chord'); if (target) target.classList.remove('target'); target = c && c !== chord ? c : null; if (target) target.classList.add('target'); },
-        end: () => {
+        end: ev => {
           dragging = false; ghost.el.remove(); chord.classList.remove('origin');
-
-          if (!target) return renderArr();
+          if (!target || ev.type !== 'pointerup') return renderArr();
           const a = findSec(chord.dataset.sec), b = findSec(target.dataset.sec), ia = +chord.dataset.bar, ib = +target.dataset.bar;
           commit(() => { const tmp = a.chords[ia]; a.chords[ia] = b.chords[ib]; b.chords[ib] = tmp; });
           select({ type: 'chord', sec: b.id, bar: ib });
+          previewChord(b.chords[ib]); // like notes: sound once on release, at the new spot
         },
         click: () => { select({ type: 'chord', sec: chord.dataset.sec, bar: +chord.dataset.bar }); previewChord(findSec(chord.dataset.sec).chords[+chord.dataset.bar]); },
       });
