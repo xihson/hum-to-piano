@@ -135,6 +135,8 @@
 
 **"＋段落"**（`.add-sec`）：紧跟在最后一段后面，点开添加段落弹窗（见 3.5）。未编曲时也能用。
 
+**悬停插入段落**（Figma 28，**只在电脑上**：`(hover: hover) and (pointer: fine)`）：鼠标在时间线上离两个段落的分界线水平 10px 以内时，编排区卡片**上方**冒出蓝色加号 `#insPin`（26×34 水滴形，尖端碰到卡片上沿），时间线上出现一条 2px 蓝色竖线 `.ins-line`。点加号或竖线（段落条以下的 20px 宽区域 `.ins-hit`）→ `openAdd({ insertAt: i })`，新段落插在这里。拖动、拖播放头、弹窗打开时不显示。加号放在卡片外面（卡片 `overflow: hidden`），用 `getBoundingClientRect` 定位，滚动时更新；工具栏下边距因此是 24px。代码：`showInsert()`、`placeInsert()`、`hideInsert()`。手机上没有这个功能，只能在最后添加。
+
 ### 3.4 编辑区
 
 未选中任何东西时，编排区正下方显示一行小字“点击段落来编辑”（`#editorHint`，Figma 27）。选中后换成编辑卡片 `#editor`，由 `renderEditor()` 根据 `sel.type` 决定显示哪种：

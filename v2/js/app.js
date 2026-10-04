@@ -407,6 +407,7 @@
     L.bw = clamp((avail - 72) / Math.max(total, 12), innerWidth <= 640 || isPhone() ? 56 : 72, 110);
     const W = total * L.bw + 72, H = L.secH + ls.length * L.laneH;
     const labels = $('#arrLabels'), tl = $('#arrTl');
+    hideInsert();
     labels.innerHTML = '<div class="head"></div>'; tl.innerHTML = '';
     tl.style.width = W + 'px'; tl.style.height = H + 'px';
     const firstAuto = ls.findIndex(l => l.auto);
@@ -558,8 +559,46 @@
     document.body.appendChild(g);
     return { el: g, dx: e.clientX - r.left, dy: e.clientY - r.top, place(ev) { g.style.left = ev.clientX - this.dx + 'px'; g.style.top = ev.clientY - this.dy - 6 + 'px'; } };
   }
+  /* Hover insert (Figma 28, desktop only): near the boundary between two sections a blue "+" appears above the card
+     with a line through the timeline; clicking either opens the add-section dialog for that spot. The pin lives
+     outside the card (the card clips), positioned from getBoundingClientRect and updated on scroll. */
+  const fineHover = matchMedia('(hover: hover) and (pointer: fine)');
+  let insAt = -1, insHideT = 0;
+  function showInsert(i) {
+    clearTimeout(insHideT);
+    const tl = $('#arrTl'), x = starts().a[i] * L.bw;
+    if (insAt !== i || !tl.querySelector('.ins-line')) {
+      tl.querySelectorAll('.ins-line, .ins-hit').forEach(el => el.remove());
+      const line = document.createElement('div'); line.className = 'ins-line'; line.style.left = x - 1 + 'px';
+      const hit = document.createElement('div'); hit.className = 'ins-hit'; hit.style.left = x - 10 + 'px';
+      tl.append(line, hit);
+    }
+    insAt = i; placeInsert();
+  }
+  function placeInsert() {
+    if (insAt < 0) return;
+    const pin = $('#insPin'), line = $('#arrTl .ins-line'); if (!line) return hideInsert();
+    const cx = line.getBoundingClientRect().left + 1, sr = $('#arrScroll').getBoundingClientRect();
+    pin.hidden = cx < sr.left || cx > sr.right; if (pin.hidden) return;
+    pin.style.left = cx - 13 + 'px'; pin.style.top = $('#arr').getBoundingClientRect().top - 34 + 'px';
+  }
+  function hideInsert() { clearTimeout(insHideT); insAt = -1; $('#insPin').hidden = true; document.querySelectorAll('#arrTl .ins-line, #arrTl .ins-hit').forEach(el => el.remove()); }
+  const hideInsertSoon = () => { clearTimeout(insHideT); insHideT = setTimeout(hideInsert, 150); };
+  $('#arrTl').addEventListener('pointermove', e => {
+    if (!fineHover.matches || dragging || e.buttons || !$('#addModal').hidden) { if (insAt >= 0) hideInsert(); return; }
+    const x = e.clientX - $('#arrTl').getBoundingClientRect().left, { a: st } = starts();
+    let at = -1; for (let i = 1; i < st.length; i++) if (Math.abs(x - st[i] * L.bw) <= 10) at = i;
+    if (at >= 0) showInsert(at); else if (insAt >= 0) hideInsertSoon();
+  });
+  $('#arr').addEventListener('pointerleave', hideInsertSoon);
+  $('#insPin').addEventListener('pointerenter', () => clearTimeout(insHideT));
+  $('#insPin').addEventListener('pointerleave', hideInsertSoon);
+  $('#insPin').addEventListener('click', () => { const i = insAt; if (i > 0) openAdd({ insertAt: i }); });
+  addEventListener('scroll', placeInsert, true);
+
   $('#arrTl').addEventListener('pointerdown', e => {
     if (e.button) return;
+    if (e.target.closest('.ins-hit')) { const i = insAt; return openAdd({ insertAt: i }); }
     if (e.target.closest('.ph-tag')) return dragPlayhead(e, { sc: $('#arrScroll'), beatAt: x => (x - $('#arrTl').getBoundingClientRect().left) / L.bw * 4, lo: 0, hi: starts().total * 4, tag: () => $('#arrTag') });
     const chord = e.target.closest('.chord'), sec = e.target.closest('.sec'), clip = e.target.closest('.clip');
     if (e.target.closest('.add-sec')) return;
@@ -928,7 +967,8 @@
   }
   /* opts.insertAt: section index to insert before (from the hover "+" between sections); default is before the outro. */
   function openAdd(opts = {}) {
-    stopPlay();
+    stopPlay(); hideInsert();
+
     addState = { name: song.sections.some(s => s.name === '主歌') ? '副歌' : '主歌', inst: 'piano', backing: true, metronome: true, bpm: song.bpm, insertAt: opts.insertAt ?? null, rec: null, res: null };
     segInit($('#addName'), ADD_NAMES.map(n => [n, n]), addState.name, v => addState.name = v);
     segInit($('#addInst'), Arrange.MELODY_INSTS, addState.inst, v => addState.inst = v);
