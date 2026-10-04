@@ -33,7 +33,7 @@ docs/               上面列出的文档
 - 修改 `song` 一律经过 `commit(fn)`，这样能撤回。
 - 没有构建步骤，也没有依赖。不要引入框架或打包工具，除非用户要求。
 - 改完 JS 后运行 `node --check`，再用 `docs/TESTING.md` 里的合成录音回归检查一遍。
-- 提交信息用英文，一次改动一个提交。push 到 `main` 就会发布到 GitHub Pages，**push 前确认用户希望上线**。
+- 提交信息用英文，一次改动一个提交。push 到 `main` 就会发布到 GitHub Pages。**用户希望 agent 自己把部署做完**：代码确认并测试过后直接 push，再用 `docs/TESTING.md` 里的命令确认构建完成；只有需要用户介入时才停下，并说清楚怎么做，比如要 token、要在网页后台点击、要加 DNS 记录。
 - 新的决定写进 `docs/DECISIONS.md`；界面或交互变了，同步更新 `docs/UX-WALKTHROUGH.md`。
 
 ## 运行
