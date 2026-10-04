@@ -750,8 +750,9 @@
     const i = prHit(e); pr.selNote = i; drawPR();
     if (i < 0) return;
     const n = pr.s.melody.notes[i], { x } = prPos(e), resize = x > (n.s + n.d) * pr.ppb - 8, orig = { ...n }, snap = snapshot(), p0 = prPos(e);
-    let changed = false, lastP = n.p;
-    Synth.play(Synth.ctx(), Synth.ctx().input, { inst: pr.s.melody.inst, m: n.p, t: Synth.ctx().c.currentTime + .01, d: .4, v: .7 });
+    let changed = false;
+    // the note sounds once, when the button is released (click or end of drag), never on press or while dragging
+    const inst = pr.s.melody.inst, sound = ev => { if (ev.type !== 'pointerup') return; const S = Synth.ctx(); Synth.play(S, S.input, { inst, m: n.p, t: S.c.currentTime + .01, d: .4, v: .7 }); };
     const tip = document.createElement('div'); tip.className = 'tip';
     gesture(e, {
       start: () => { $('#edBody').appendChild(tip); },
@@ -760,14 +761,14 @@
         if (resize) n.d = clamp(orig.d + db, .25, pr.beats - n.s);
         else { n.s = clamp(orig.s + db, 0, pr.beats - n.d); n.p = clamp(orig.p + dp, 24, 108); }
         changed = n.s !== orig.s || n.p !== orig.p || n.d !== orig.d;
-        if (n.p !== lastP) { lastP = n.p; Synth.play(Synth.ctx(), Synth.ctx().input, { inst: pr.s.melody.inst, m: n.p, t: Synth.ctx().c.currentTime + .01, d: .3, v: .6 }); }
         tip.textContent = resize ? t(n.d === 1 ? 'tip.beat' : 'tip.beats', { n: n.d }) : (n.p === orig.p ? Theory.noteName(n.p) : Theory.noteName(orig.p) + ' → ' + Theory.noteName(n.p));
         const ny = (pr.hi - n.p) * pr.rh, bodyR = $('#edBody').getBoundingClientRect(), cvR = pr.cv.getBoundingClientRect();
         tip.style.left = cvR.left - bodyR.left + n.s * pr.ppb + 'px'; tip.style.top = Math.max(2, cvR.top - bodyR.top + ny - 30) + 'px';
         drawPR(); // the arrangement preview refreshes on pointerup via afterChange()
       },
-      end: () => {
-        tip.remove();
+      click: sound,
+      end: ev => {
+        tip.remove(); sound(ev);
         if (changed) { pr.s.melody.notes.sort((a, c) => a.s - c.s); pr.selNote = pr.s.melody.notes.indexOf(n); pushHistory(snap); afterChange(); }
       },
     });
