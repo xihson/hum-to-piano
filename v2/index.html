@@ -173,7 +173,7 @@ svg { display: block; }
 .sweep { position: absolute; width: 2px; background: var(--accent); z-index: 3; pointer-events: none; box-shadow: -14px 0 24px 6px color-mix(in srgb, var(--accent) 22%, transparent); animation: sweep 1.2s .45s cubic-bezier(.45, 0, .25, 1) both; }
 @keyframes sweep { from { left: 0; opacity: 1; } 95% { opacity: 1; } to { left: 100%; opacity: 0; } }
 
-.editor-hint { flex: 1; display: grid; place-items: center; color: var(--muted); font-size: 13px; min-height: 120px; }
+.editor-hint { margin-top: 14px; text-align: center; color: var(--muted); font-size: 13px; }
 .editor { flex: 1; min-height: 240px; margin: 14px 0 24px; display: flex; flex-direction: column; overflow: hidden; }
 .ed-head { flex: none; height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 10px 0 16px; border-bottom: 1px solid var(--line); }
 .ed-title { display: flex; align-items: center; gap: 10px; font-weight: 500; font-size: 14px; min-width: 0; }
@@ -342,7 +342,7 @@ a.pill { text-decoration: none; justify-content: center; }
     <div class="actions">
       <button class="circ" id="reBtn" aria-label="重新录" title="重新录"><i data-icon="rotate"></i></button>
       <button class="circ" id="dlBtn" aria-label="下载" title="下载"><i data-icon="download"></i></button>
-      <button class="pill dark" id="sunoBtn"><i data-icon="sparkle"></i>Suno</button>
+      <button class="pill dark" id="sunoBtn" hidden><i data-icon="sparkle"></i>用 Suno 渲染！</button>
     </div>
   </header>
   <div class="toolbar">
@@ -364,7 +364,7 @@ a.pill { text-decoration: none; justify-content: center; }
     <div class="arr-labels" id="arrLabels"></div>
     <div class="arr-scroll" id="arrScroll"><div class="arr-tl" id="arrTl"></div></div>
   </div>
-  <div class="editor-hint" id="editorHint">选中段落来编辑</div>
+  <div class="editor-hint" id="editorHint">点击段落来编辑</div>
   <div class="card editor" id="editor" hidden>
     <div class="ed-head">
       <div class="ed-title"><i class="dot" id="edDot"></i><span id="edTitle"></span><button class="chip" id="edInst" hidden><span></span><i data-icon="chev"></i></button></div>

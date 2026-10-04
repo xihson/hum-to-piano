@@ -370,8 +370,8 @@
     const out = [], insts = [];
     for (const s of song.sections) if (s.melody && !insts.includes(s.melody.inst)) insts.push(s.melody.inst);
     for (const i of insts) out.push({ id: 'melody:' + i, kind: 'melody', inst: i, label: Arrange.instLabel(i), color: instColor(i) });
-    if (song.sections.some(s => s.hits.some(h => h.k === 'clap'))) out.push({ id: 'clap', kind: 'hits', hit: 'clap', label: '拍手', color: '--hits' });
-    if (song.sections.some(s => s.hits.some(h => h.k === 'snap'))) out.push({ id: 'snap', kind: 'hits', hit: 'snap', label: '响指', color: '--hits' });
+    if (song.sections.some(s => s.hits.some(h => h.k === 'clap'))) out.push({ id: 'clap', kind: 'hits', hit: 'clap', label: '军鼓', color: '--hits' });
+    if (song.sections.some(s => s.hits.some(h => h.k === 'snap'))) out.push({ id: 'snap', kind: 'hits', hit: 'snap', label: '踩镲', color: '--hits' });
     if (song.arranged) {
       out.push({ id: 'chords', kind: 'chords', label: '和弦', color: '--chords', auto: true });
       out.push({ id: 'bass', kind: 'auto', label: '贝斯', color: '--bass', auto: true });
@@ -388,6 +388,7 @@
     $('#styleChip span').textContent = Arrange.STYLES[song.style].label;
     $('#preArrange').hidden = song.arranged && !arranging;
     $('#styleSeg').hidden = !song.arranged || arranging;
+    $('#sunoBtn').hidden = !song.arranged || arranging;
     const seg = $('#styleSeg'); seg.innerHTML = '';
     for (const id of Arrange.STYLE_ORDER) { const b = document.createElement('button'); b.textContent = Arrange.STYLES[id].label; b.setAttribute('aria-pressed', id === song.style); b.addEventListener('click', () => { if (song.style === id) return; commit(() => { song.style = id; }, 'style'); }); seg.appendChild(b); }
     setPlayIcon();
@@ -646,7 +647,7 @@
   }
   function buildHitGrid(body, s) {
     const wrap = document.createElement('div'); wrap.className = 'grid-ed';
-    for (const [k, lab] of [['clap', '拍手'], ['snap', '响指']]) {
+    for (const [k, lab] of [['clap', '军鼓'], ['snap', '踩镲']]) {
       const row = document.createElement('div'); row.className = 'grid-row'; row.innerHTML = `<span>${lab}</span>`;
       const cells = document.createElement('div'); cells.className = 'cells';
       for (let b = 0; b < s.bars; b++) {
