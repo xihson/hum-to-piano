@@ -60,6 +60,16 @@ r2.hits // [{t:1,k:'clap'}, {t:2.5,k:'snap'}]
 
 只有鼓点、没有哼唱时（传一段静音），也应该返回结果；什么都没有时返回 `null`。
 
+**没有麦克风时测录音界面**：把 `getUserMedia` 换成一个振荡器，就能走完预备拍、按键打鼓、Esc 确认、回车停止这些流程（音高恒定的振荡器不会被识别成旋律，结果只有鼓点）：
+
+```js
+navigator.mediaDevices.getUserMedia = async () => { const c = Synth.ctx().c, d = c.createMediaStreamDestination(), o = c.createOscillator(); o.frequency.value = 330; o.connect(d); o.start(); return d.stream; };
+document.querySelector('#recBtn').click();
+// 之后：document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', key: ' ', bubbles: true, cancelable: true }))
+```
+
+内置浏览器面板不在前台时页面不出帧，CSS 过渡和 `requestAnimationFrame` 会停住，截图可能是旧画面；以 JS 读出的状态为准。
+
 **混音峰值检查**（应 < 1.0，2026-10-04 实测 0.91）：
 
 ```js
@@ -77,6 +87,9 @@ let p = 0; for (let ch = 0; ch < 2; ch++) for (const v of b.getChannelData(ch)) 
 - [ ] 添加段落时开伴奏，伴奏会不会被误识别成旋律。
 - [ ] 手机 Safari：麦克风权限、`ScriptProcessorNode`、`OfflineAudioContext`。
 - [ ] 下载：MIDI 能否导入 GarageBand 或 FL Studio；WAV 能否播放。
+- [ ] 手机竖屏录完 → “横过来编辑”提示；转横屏后自动消失；开着旋转锁定时 5 秒后出现“尝试关闭旋转锁定。”。
+- [ ] 手机横屏布局（M2–M4）：顶栏一行、编排区占满、点段落后编辑器占满、添加段落全屏面板；长按段落 0.4 秒换顺序、直接滑动平移。
+- [ ] 手机录音页和添加段落里的军鼓 / 踩镲大按钮：按下即响，没有明显延迟。
 
 ## 发布
 
