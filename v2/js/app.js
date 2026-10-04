@@ -144,7 +144,7 @@
     R.tStart = c.currentTime + .15;
     R.count = opts.metronome ? 8 : 0;
     R.beat0Ctx = R.tStart + (opts.metronome ? R.count * R.spb : 3);
-    R.split = R.tStart + (opts.metronome ? 4 * R.spb : 2.5); // full-screen count flies up here (recording screen only)
+    R.split = R.tStart + (opts.metronome ? 4 * R.spb : 1.5); // full-screen count flies up here: after bar 1, or half a second into the "2" (recording screen only)
     R.nextClick = 0;
     if (opts.metronome || opts.backing) { R.timer = setInterval(() => pumpRec(R), 40); pumpRec(R); }
     if (opts.backing) { const b = opts.backing; R.back = { events: b.events, loop: b.loop, k: 0, idx: 0 }; }
@@ -175,7 +175,7 @@
   function liveLoop(R) {
     if (R.stopped) return;
     const c = R.c, sr = c.sampleRate, ct = c.currentTime, o = R.opts, counting = ct < R.beat0Ctx;
-    R.now = R.firstCtx === null ? 0 : Math.min(ct, R.beat0Ctx) - R.firstCtx; // the view starts scrolling when the count-in ends
+    R.now = R.firstCtx === null ? 0 : Math.max(ct, R.beat0Ctx) - R.firstCtx; // held at beat 0 during the count-in, scrolls from there
     let m = NaN;
     if (!counting) {
       R.an.getFloatTimeDomainData(R.buf);
