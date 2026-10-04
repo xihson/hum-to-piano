@@ -476,6 +476,7 @@
       setTimeout(() => tl.querySelectorAll('.wipe, .sweep').forEach(e => e.remove()), 1800);
     }
     add('playhead', { left: playhead * L.bw / 4 + 'px' }).id = 'arrPlayhead';
+    add('ph-tag', { left: playhead * L.bw / 4 - 7 + 'px' }, PH_TAG).id = 'arrTag';
     $('#editorHint').hidden = !!sel;
     scroll.scrollLeft = keepScroll;
     updateBar();
@@ -526,6 +527,31 @@
     return { start() { dragging = true; }, move(ev) { sc.scrollLeft = sl0 - (ev.clientX - x0); }, end() { dragging = false; } };
   }
   let dragging = false;
+  /* Playhead handle (Figma 27, 31): only the handle drags, the line itself ignores the pointer. o.beatAt(clientX) maps
+     to a beat, clamped to [o.lo, o.hi] and snapped to 1/4 beat; the time floats beside the handle. Playback pauses while
+     dragging and resumes from the new spot. */
+  const PH_TAG = '<svg viewBox="0 0 14 18" aria-hidden="true"><path d="M3 0h8a3 3 0 0 1 3 3v8.7a2 2 0 0 1-.7 1.5l-5 4.3a2 2 0 0 1-2.6 0l-5-4.3A2 2 0 0 1 0 11.7V3a3 3 0 0 1 3-3Z" fill="currentColor"/></svg>';
+  function dragPlayhead(e, o) {
+    e.preventDefault();
+    const was = !!player; stopPlay(); dragging = true;
+    const tip = document.createElement('div'); tip.className = 'tip fixed'; document.body.appendChild(tip);
+    const grab = o.beatAt(e.clientX) - playhead;
+    let last = e;
+    const edge = edgeScroll(o.sc, () => move(last));
+    function move(ev) {
+      last = ev; edge.at(ev.clientX);
+      playhead = clamp(Math.round((o.beatAt(ev.clientX) - grab) * 4) / 4, o.lo, o.hi); movePlayhead(o.follow);
+      tip.textContent = fmt(playhead * 60 / song.bpm);
+      const r = o.tag().getBoundingClientRect(); tip.style.left = r.right + 6 + 'px'; tip.style.top = r.top + r.height / 2 - 12 + 'px';
+    }
+    function up() {
+      edge.stop(); tip.remove(); dragging = false;
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+      if (was) startPlay();
+    }
+    move(e);
+    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  }
   function makeGhost(el, e) {
     const r = el.getBoundingClientRect(), g = el.cloneNode(true);
     g.classList.add('ghost'); g.classList.remove('selected'); g.style.left = r.left + 'px'; g.style.top = r.top + 'px'; g.style.width = r.width + 'px'; g.style.height = r.height + 'px';
@@ -534,6 +560,7 @@
   }
   $('#arrTl').addEventListener('pointerdown', e => {
     if (e.button) return;
+    if (e.target.closest('.ph-tag')) return dragPlayhead(e, { sc: $('#arrScroll'), beatAt: x => (x - $('#arrTl').getBoundingClientRect().left) / L.bw * 4, lo: 0, hi: starts().total * 4, tag: () => $('#arrTag') });
     const chord = e.target.closest('.chord'), sec = e.target.closest('.sec'), clip = e.target.closest('.clip');
     if (e.target.closest('.add-sec')) return;
     if (chord) {
@@ -778,7 +805,12 @@
     if (x > sc.scrollLeft + sc.clientWidth - 60 || x < sc.scrollLeft) sc.scrollLeft = Math.max(0, x - 60);
     P.raf = requestAnimationFrame(frame);
   }
-  function movePlayhead() { const ph = $('#arrPlayhead'); if (ph) ph.style.left = playhead * L.bw / 4 + 'px'; if (pr) drawPR(); updateTime(); }
+  function movePlayhead() {
+    const x = playhead * L.bw / 4, ph = $('#arrPlayhead'), tag = $('#arrTag');
+    if (ph) ph.style.left = x + 'px'; if (tag) tag.style.left = x - 7 + 'px';
+    if (pr) drawPR(); updateTime();
+  }
+
   function stopPlay() {
     const P = player; if (!P) return; player = null;
     clearInterval(P.timer); cancelAnimationFrame(P.raf);
