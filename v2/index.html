@@ -44,12 +44,13 @@ svg { display: block; }
 .logo { display: grid; grid-template-columns: 18px auto 14px 18px; gap: 4px 7px; align-items: center; font-weight: 500; font-size: 14px; width: max-content; }
 .logo svg { width: 18px; height: 18px; }
 .logo .arrow { color: var(--muted); font: 500 13px var(--font-num); text-align: center; }
+.logo .kb-row { display: contents; }
+.kcap { display: inline-block; height: 18px; padding: 0 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); color: var(--ink); font: 400 12px/15px var(--font-ui); }
 
 .circ { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; cursor: pointer; transition: background .15s; flex: none; }
 .circ:hover { background: var(--sunken); }
 .circ svg { width: 20px; height: 20px; }
 .circ[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-.circ.off svg { color: var(--muted); }
 .circ[aria-pressed="true"] svg { color: var(--accent); }
 .pill { height: 44px; padding: 0 18px 0 14px; border-radius: 22px; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; font-size: 14px; flex: none; white-space: nowrap; }
 .pill svg { width: 18px; height: 18px; }
@@ -78,14 +79,30 @@ svg { display: block; }
 
 /* recording */
 .rec-main { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 22px; padding-bottom: 32px; min-height: 0; }
-.rec-top { display: flex; align-items: center; gap: 28px; height: 96px; }
+.rec-top { display: flex; align-items: center; justify-content: center; gap: 28px; height: 96px; }
 .big-note { font: 600 88px/1 var(--font-num); letter-spacing: -.02em; font-variant-numeric: tabular-nums; min-width: 1.6em; text-align: center; transition: opacity .2s; }
 .big-note.quiet { opacity: .2; }
 .big-note.count { color: var(--accent); }
-.beats { display: flex; align-items: center; gap: 12px; }
-.beats i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); }
-.beats i:first-child { width: 15px; height: 15px; }
+.big-note.gone { display: none; }
+.beats { display: flex; align-items: center; gap: 7px; }
+.beats i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); flex: none; }
+.beats i:nth-child(4n+1) { width: 15px; height: 15px; }
+.beats i:nth-child(5) { margin-left: 17px; }
 .beats i.on { background: var(--accent); }
+.beats.sm { gap: 4px; }
+.beats.sm i { width: 6px; height: 6px; }
+.beats.sm i:nth-child(4n+1) { width: 8px; height: 8px; }
+.beats.sm i:nth-child(5) { margin-left: 9px; }
+/* count-in: first only the count fills the screen, then it flies to its place and the rest fades in */
+#recording .logo-head, #recording .rec-main > * { transition: opacity .3s; }
+#recording.counting .logo-head, #recording.counting .rec-main > * { opacity: 0; pointer-events: none; transition: none; }
+.count-in { position: fixed; z-index: 40; pointer-events: none; display: flex; align-items: center; justify-content: center; transform-origin: 50% 50%; }
+.count-in.fly { transition: transform .4s cubic-bezier(.2, .7, .3, 1); }
+.count-in .big-note { min-width: 0; }
+.pads { display: none; gap: 12px; width: 100%; }
+.pad { flex: 1; height: 160px; border: 0; border-radius: 26px; background: var(--hits-soft); color: var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; font-weight: 500; font-size: 14px; cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.pad svg { width: 36px; height: 36px; }
+.pad.on { background: var(--hits); }
 .live { width: 100%; height: min(290px, 40vh); position: relative; overflow: hidden; }
 .live canvas { position: absolute; inset: 0; }
 .stopbar { display: flex; align-items: center; gap: 20px; }
@@ -236,6 +253,14 @@ svg { display: block; }
 a.pill { text-decoration: none; justify-content: center; }
 .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 90; max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 10px; background: var(--ink); color: var(--bg); font-size: 14px; line-height: 1.5; box-shadow: 0 8px 24px var(--lift); }
 
+@media (pointer: coarse), (max-width: 640px) {
+  .logo .kb-row { display: none; }
+  .pads { display: flex; }
+  #recording .rec-main { gap: 18px; padding-bottom: 20px; }
+  #recording .live { height: auto; flex: 1 1 200px; min-height: 150px; max-height: 290px; }
+  #recording .stopbar { flex-direction: column; gap: 10px; }
+  #recording .rec-top { height: 80px; }
+}
 @media (max-width: 640px) {
   .arr { grid-template-columns: 112px minmax(0, 1fr); }
   .rec-btn { width: 112px; height: 112px; }
@@ -250,8 +275,8 @@ a.pill { text-decoration: none; justify-content: center; }
 <template id="logoTpl">
   <div class="logo">
     <i data-icon="speech"></i><span>哼唱</span><span class="arrow">→</span><i data-icon="piano"></i>
-    <i data-icon="clap"></i><span>拍手</span><span class="arrow">→</span><i data-icon="drum"></i>
-    <i data-icon="snap"></i><span>响指</span><span class="arrow">→</span><i data-icon="hihat"></i>
+    <div class="kb-row"><i data-icon="keyboard"></i><span><kbd class="kcap">空格</kbd></span><span class="arrow">→</span><i data-icon="drum"></i></div>
+    <div class="kb-row"><i data-icon="keyboard"></i><span><kbd class="kcap num">Alt</kbd></span><span class="arrow">→</span><i data-icon="hihat"></i></div>
   </div>
 </template>
 
@@ -274,13 +299,15 @@ a.pill { text-decoration: none; justify-content: center; }
 <section class="screen" id="recording" hidden>
   <header class="logo-head" data-logo></header>
   <main class="rec-main">
-    <div class="rec-top"><div class="big-note quiet" id="bigNote">–</div><div class="beats" id="beatDots" hidden><i></i><i></i><i></i><i></i></div></div>
+    <div class="rec-top"><div class="big-note quiet" id="bigNote">–</div><div class="beats" id="beatDots" hidden><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
     <div class="card live" id="live"><canvas id="liveCv"></canvas></div>
+    <div class="pads" id="recPads"><button class="pad" data-k="clap"><i data-icon="drum"></i><span>军鼓</span></button><button class="pad" data-k="snap"><i data-icon="hihat"></i><span>踩镲</span></button></div>
     <div class="stopbar">
       <button class="stop-btn" id="stopBtn" aria-label="停止" title="停止（回车）"><i data-icon="stop"></i></button>
       <div class="timer"><i></i><span id="timer">0:00</span></div>
     </div>
   </main>
+  <div class="count-in" id="countIn" hidden></div>
 </section>
 
 <section class="screen" id="work" hidden>

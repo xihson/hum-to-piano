@@ -20,6 +20,7 @@
     snap: `<g transform="translate(0 5.5) scale(0.76)" stroke-width="2.6"><path d="${HAND}"/></g><path d="M19.5 1.8v2.6"/><path d="M22.4 5h-2.6"/><path d="M22 2.3l-1.7 1.7"/>`,
     piano: '<path d="M18.5 8c-1.4 0-2.6-.8-3.2-2A6.87 6.87 0 0 0 2 9v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-8.5C22 9.6 20.4 8 18.5 8"/><path d="M2 14h20"/><path d="M6 14v4"/><path d="M10 14v4"/><path d="M14 14v4"/><path d="M18 14v4"/>',
     drum: '<path d="m2 2 8 8"/><path d="m22 2-8 8"/><ellipse cx="12" cy="9" rx="10" ry="5"/><path d="M7 13.4v7.9"/><path d="M12 14v8"/><path d="M17 13.4v7.9"/><path d="M2 9v8a10 5 0 0 0 20 0V9"/>',
+    keyboard: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M7 16h10"/>',
     hihat: '<path d="M3 8c3-1.8 15-1.8 18 0"/><path d="M3 11.5c3 1.8 15 1.8 18 0"/><path d="M12 3.5v18"/><path d="M8.5 21.5h7"/>',
     stop: '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>',
     play: '<path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z" fill="currentColor" stroke="none"/>',
@@ -50,6 +51,7 @@
   const rr = (g, x, y, w, h, r) => { r = Math.max(0, Math.min(r, w / 2, h / 2)); g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
   const save = (blob, name) => { const u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 3000); };
   const instColor = inst => `--i-${inst}`;
+  const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* ---------------- state ---------------- */
   const prefs = (() => { try { return JSON.parse(localStorage.getItem('hum2-prefs')) || {}; } catch (e) { return {}; } })();
@@ -135,9 +137,11 @@
       R.chunks.push(data); R.n += data.length;
     };
     src.connect(proc); proc.connect(mute); mute.connect(c.destination);
+    // count-in: two bars of clicks with the metronome, a silent 3-2-1 without it
     R.tStart = c.currentTime + .15;
-    R.count = opts.metronome ? 4 : 0;
-    R.beat0Ctx = R.tStart + R.count * R.spb;
+    R.count = opts.metronome ? 8 : 0;
+    R.beat0Ctx = R.tStart + (opts.metronome ? R.count * R.spb : 3);
+    R.split = R.tStart + (opts.metronome ? 4 * R.spb : 2.5); // full-screen count flies up here (recording screen only)
     R.nextClick = 0;
     if (opts.metronome || opts.backing) { R.timer = setInterval(() => pumpRec(R), 40); pumpRec(R); }
     if (opts.backing) { const b = opts.backing; R.back = { events: b.events, loop: b.loop, k: 0, idx: 0 }; }
@@ -167,23 +171,61 @@
   }
   function liveLoop(R) {
     if (R.stopped) return;
-    const c = R.c, sr = c.sampleRate, now = R.firstCtx === null ? 0 : c.currentTime - R.firstCtx;
-    R.now = now;
-    R.an.getFloatTimeDomainData(R.buf);
-    let e = 0; for (const v of R.buf) e += v * v;
-    const rms = Math.sqrt(e / R.buf.length);
+    const c = R.c, sr = c.sampleRate, ct = c.currentTime, o = R.opts, counting = ct < R.beat0Ctx;
+    R.now = R.firstCtx === null ? 0 : Math.min(ct, R.beat0Ctx) - R.firstCtx; // the view starts scrolling when the count-in ends
     let m = NaN;
-    if (rms > .006) { const r = DSP.yin(R.buf, 0, 1024, sr, Math.floor(sr / 1000), Math.min(1024, Math.ceil(sr / 65)), R.d); if (r.c < .2 && r.f > 65 && r.f < DSP.F_MAX) m = 69 + 12 * Math.log2(r.f / 440); }
-    R.live.pitch.push({ t: now, m });
-    const beat = Math.floor((c.currentTime - R.tStart) / R.spb);
-    const noteEl = R.opts.noteEl;
-    if (R.count && beat < R.count) { noteEl.textContent = beat >= 0 ? String(beat + 1) : ''; noteEl.classList.add('count'); noteEl.classList.remove('quiet'); }
-    else { noteEl.classList.remove('count'); if (!isNaN(m)) { noteEl.textContent = Theory.noteName(Math.round(m)); noteEl.classList.remove('quiet'); } else noteEl.classList.add('quiet'); }
-    if (R.opts.beatEl) { R.opts.beatEl.hidden = !R.opts.metronome; R.opts.beatEl.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', beat >= 0 && beat % 4 === i)); }
-    const recT = Math.max(0, c.currentTime - R.beat0Ctx);
-    R.opts.timerEl.textContent = fmt(recT);
+    if (!counting) {
+      R.an.getFloatTimeDomainData(R.buf);
+      let e = 0; for (const v of R.buf) e += v * v;
+      const rms = Math.sqrt(e / R.buf.length);
+      if (rms > .006) { const r = DSP.yin(R.buf, 0, 1024, sr, Math.floor(sr / 1000), Math.min(1024, Math.ceil(sr / 65)), R.d); if (r.c < .2 && r.f > 65 && r.f < DSP.F_MAX) m = 69 + 12 * Math.log2(r.f / 440); }
+      R.live.pitch.push({ t: R.now, m });
+    }
+    const beat = Math.floor((ct - R.tStart) / R.spb), noteEl = o.noteEl;
+    // count-in: the dots fill up one by one; while recording only the current beat of the two-bar cycle is lit
+    if (o.beatEl) { o.beatEl.hidden = !o.metronome; o.beatEl.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', counting ? beat >= i : beat % 8 === i)); }
+    if (counting) {
+      if (!o.metronome) { noteEl.textContent = String(clamp(3 - Math.floor(ct - R.tStart), 1, 3)); noteEl.classList.add('count'); noteEl.classList.remove('quiet'); }
+    } else {
+      if (!R.started) { R.started = true; noteEl.textContent = o.compact ? '' : '–'; noteEl.classList.remove('count'); noteEl.classList.add('quiet'); if (noteEl.classList.contains('gone')) revealNote(o); }
+      if (!isNaN(m)) { noteEl.textContent = Theory.noteName(Math.round(m)); noteEl.classList.remove('quiet'); } else noteEl.classList.add('quiet');
+    }
+    if (o.countEl) countIn(R, ct);
+    o.timerEl.textContent = fmt(Math.max(0, ct - R.beat0Ctx));
     drawLive(R);
     R.raf = requestAnimationFrame(() => liveLoop(R));
+  }
+  /* Recording-screen count-in (Figma 22a–23b). A copy of the real dots / number sits over them, scaled up to fill the
+     screen; at R.split the copy shrinks back onto the real element (FLIP) and the rest of the screen fades in. */
+  function placeCount(o) {
+    const C = o.countEl, target = o.metronome ? o.beatEl : o.noteEl;
+    if (!C.firstChild) { const k = target.cloneNode(true); k.removeAttribute('id'); k.hidden = false; C.appendChild(k); C.hidden = false; }
+    const copy = C.firstChild;
+    if (o.metronome) copy.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', o.beatEl.children[i].classList.contains('on')));
+    else { copy.textContent = o.noteEl.textContent; copy.className = o.noteEl.className; }
+    const r = target.getBoundingClientRect(); if (!r.width) return;
+    Object.assign(C.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+    const k = o.metronome ? Math.min(3.6, (innerWidth - 40) / r.width) : Math.min(260 / parseFloat(getComputedStyle(o.noteEl).fontSize), innerHeight * .6 / r.height);
+    C.style.transform = `translate(${innerWidth / 2 - r.left - r.width / 2}px, ${innerHeight / 2 - r.top - r.height / 2}px) scale(${k})`;
+  }
+  function countIn(R, ct) {
+    const o = R.opts, C = o.countEl;
+    if (R.flying) { if (o.metronome && C.firstChild) C.firstChild.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', o.beatEl.children[i].classList.contains('on'))); return; }
+    placeCount(o);
+    if (ct < R.split) return;
+    R.flying = true;
+    const land = () => { if (R.stopped) return; o.screenEl.classList.remove('counting'); setTimeout(() => { if (!R.stopped) resetCount(); }, reducedMotion() ? 0 : 300); };
+    if (reducedMotion()) return land();
+    void C.offsetWidth; C.classList.add('fly'); C.style.transform = 'none';
+    setTimeout(land, 400);
+  }
+  function resetCount() { const C = $('#countIn'); C.hidden = true; C.innerHTML = ''; C.className = 'count-in'; C.style.transform = ''; }
+  // metronome: the note name appears when recording starts; slide the dots over instead of letting them jump
+  function revealNote(o) {
+    const d = o.beatEl, r1 = d.getBoundingClientRect();
+    o.noteEl.classList.remove('gone');
+    const r2 = d.getBoundingClientRect();
+    if (!reducedMotion() && r1.width && d.animate) d.animate([{ transform: `translateX(${r1.left - r2.left}px)` }, { transform: 'none' }], { duration: 300, easing: 'ease-out' });
   }
   function drawLive(R) {
     const cv = R.opts.canvas, box = cv.parentElement, W = box.clientWidth, H = box.clientHeight; if (!W || !H) return;
@@ -274,14 +316,22 @@
   let mainRec = null;
   async function startMain() {
     if (mainRec) return;
-    $('#bigNote').textContent = '–'; $('#bigNote').className = 'big-note quiet';
+    const metronome = prefs.metronome, bn = $('#bigNote'), dots = $('#beatDots');
+    bn.textContent = metronome ? '' : '3'; bn.className = 'big-note ' + (metronome ? 'gone' : 'count');
+    dots.hidden = !metronome; dots.querySelectorAll('i').forEach(d => d.classList.remove('on'));
+    $('#timer').textContent = '0:00';
+    resetCount(); $('#recording').classList.add('counting');
     show('recording');
-    mainRec = await startCapture({ canvas: $('#liveCv'), noteEl: $('#bigNote'), beatEl: $('#beatDots'), timerEl: $('#timer'), metronome: prefs.metronome, bpm: prefs.bpm });
-    if (!mainRec) show('home');
+    const opts = { canvas: $('#liveCv'), noteEl: bn, beatEl: dots, timerEl: $('#timer'), countEl: $('#countIn'), screenEl: $('#recording'), metronome, bpm: prefs.bpm };
+    placeCount(opts);
+    mainRec = await startCapture(opts);
+    if (!mainRec) { resetCount(); show('home'); }
   }
+  function leaveRecording() { resetCount(); $('#recording').classList.remove('counting'); }
   async function stopMain() {
     if (!mainRec) return;
     const R = mainRec; mainRec = null;
+    leaveRecording();
     const out = await stopCapture(R);
     if (!out) { show('home'); return; }
     $('#analyzing').hidden = false;
@@ -298,11 +348,19 @@
     closeQuit();
     const R = mainRec; mainRec = null;
     if (R) stopCapture(R);
-    show('home');
+    leaveRecording(); show('home');
   }
   $('#quitNo').addEventListener('click', closeQuit);
   $('#quitYes').addEventListener('click', abandonMain);
+  // phone pads (Figma 25): pointerdown, not click, so the hit lands when the finger does
+  document.querySelectorAll('.pad').forEach(p => p.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    const R = screen === 'recording' ? mainRec : addState && addState.rec;
+    if (!R) return;
+    tap(R, p.dataset.k); p.classList.add('on'); clearTimeout(p._t); p._t = setTimeout(() => p.classList.remove('on'), 120);
+  }));
   $('#recBtn').addEventListener('click', startMain);
+
   $('#stopBtn').addEventListener('click', stopMain);
 
   /* ---------------- workspace: layout ---------------- */
