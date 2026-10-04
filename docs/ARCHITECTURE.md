@@ -1,8 +1,9 @@
 # 架构：v2
 
-纯前端、无构建步骤、无依赖。五个普通 `<script>`（不是 ES module，所以用 `file://` 直接打开也能跑），按顺序加载，各自往全局挂一个对象：
+纯前端、无构建步骤、无依赖。六个普通 `<script>`（不是 ES module，所以用 `file://` 直接打开也能跑），按顺序加载，各自往全局挂一个对象：
 
 ```
+i18n.js    → t() 等   界面文案（中 / 英 / 德），最先加载
 theory.js  → Theory   乐理（不依赖其他模块）
 dsp.js     → DSP      信号分析（不依赖其他模块）
 synth.js   → Synth    发声（不依赖其他模块）
@@ -138,8 +139,17 @@ Section = {
 ### 加图标
 往 `app.js` 的 `ICONS` 加 SVG 内部（24×24 viewBox，描边用 `currentColor`），在 HTML 里写 `<i data-icon="名字"></i>`，或在 JS 里用 `icon('名字')`。Figma 文件 `Components` 板上有对应的图标组件。
 
-### 多语言（还没做）
-文案目前直接写在 `index.html` 和 `app.js` 里。做英语和德语时，建议把所有文案抽成 `strings.<lang>`，用 `data-i18n` 属性加一个 `t(key)` 函数；语言菜单（`#langBtn`）已经留好了位置。
+### 多语言
+
+`v2/js/i18n.js`：`STRINGS = { zh, en, de }`（扁平的点号键，如 `toast.noMic`、`style.pop`），`t(key, vars)`（`{name}` 占位；找不到时退回中文，再退回键名），`setLang(l)`（同时设 `<html lang>` 和 `document.title`），`applyI18n(root)`，`secName(存储的段落名)`。
+
+- `index.html` 里的静态文案用 `data-i18n`（文字）、`data-i18n-aria`、`data-i18n-title`、`data-i18n-label`（aria-label 和 title 都设）。带图标的按钮把文字包在 `<span data-i18n>` 里。
+- `app.js` 里的动态文案一律 `t(...)`；风格、乐器、调名在显示时翻译（`styleName()`、`instName()`、`keyName()`），`Theory` 和 `Arrange` 里的中文标签只是数据。
+- **段落名在 `song` 里存的是中文**（主歌 / 副歌 / 桥段 / 尾声 / 前奏），显示时经 `secName()` 翻译，不认识的名字原样显示。不要改存储值，否则旧数据和撤回历史会对不上。
+- 语言存在 `prefs.lang`（默认 `zh`，不按浏览器自动选），语言菜单切换后整页立即更新。
+- 加文案：三种语言都要加；德语按钮文字尽量短。非中文时有几条 CSS 放宽了标签列宽度（`:root:not([lang="zh-CN"])`）。
+
+**脚本缓存**：`index.html` 里的 `<script src="js/…?v=日期">` 带版本号，因为 GitHub Pages 缓存 10 分钟，新旧文件可能混用。**改了 JS 就把版本号改掉**（所有脚本用同一个值）。
 
 ## 6. 可调参数
 
@@ -167,4 +177,3 @@ Section = {
 - 和声：每小节一个和弦，只用调内三和弦；没有转调；固定 4/4 拍。
 - WAV 渲染约为实时的 1/4（30 秒的歌要 7 秒左右）。
 - 改速度只改播放速度，不会重新对齐原始录音（"原声"下载不受影响）。
-- 语言菜单只是占位。

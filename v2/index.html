@@ -251,6 +251,7 @@ svg { display: block; }
 .sheet-head h2 { margin: 0; font-size: 20px; font-weight: 500; }
 .field { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .field > span { width: 40px; color: var(--muted); font-size: 13px; }
+:root:not([lang="zh-CN"]) .field > span { width: 72px; }
 .rec-area { position: relative; height: 200px; border-radius: 14px; background: var(--sunken); overflow: hidden; }
 .rec-area canvas { position: absolute; inset: 0; }
 .rec-area .note-box { position: absolute; right: 22px; top: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }
@@ -302,9 +303,11 @@ a.pill { text-decoration: none; justify-content: center; }
 }
 @media (max-width: 640px) {
   .arr { grid-template-columns: 112px minmax(0, 1fr); }
+  :root:not([lang="zh-CN"]) .arr { grid-template-columns: 124px minmax(0, 1fr); }
   .rec-btn { width: 112px; height: 112px; }
   .big-note { font-size: 64px; }
   .seg button { padding: 7px 10px; }
+  :root:not([lang="zh-CN"]) .seg button { padding: 7px 8px; font-size: 13px; }
 }
 #work.arranged #styleChip { display: none; }
 .rotate { position: fixed; inset: 0; z-index: 85; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; }
@@ -352,8 +355,8 @@ a.pill { text-decoration: none; justify-content: center; }
 
 <template id="logoTpl">
   <div class="logo">
-    <i data-icon="speech"></i><span>哼唱</span><span class="arrow">→</span><i data-icon="piano"></i>
-    <div class="kb-row"><i data-icon="keyboard"></i><span><kbd class="kcap">空格</kbd></span><span class="arrow">→</span><i data-icon="drum"></i></div>
+    <i data-icon="speech"></i><span data-i18n="logo.hum"></span><span class="arrow">→</span><i data-icon="piano"></i>
+    <div class="kb-row"><i data-icon="keyboard"></i><span><kbd class="kcap" data-i18n="logo.space"></kbd></span><span class="arrow">→</span><i data-icon="drum"></i></div>
     <div class="kb-row"><i data-icon="keyboard"></i><span><kbd class="kcap num">Alt</kbd></span><span class="arrow">→</span><i data-icon="hihat"></i></div>
   </div>
 </template>
@@ -361,14 +364,14 @@ a.pill { text-decoration: none; justify-content: center; }
 <section class="screen" id="home">
   <header class="logo-head" data-logo></header>
   <main class="home-main">
-    <button class="rec-btn" id="recBtn" aria-label="开始录音" title="开始录音（空格）"><i data-icon="mic"></i></button>
+    <button class="rec-btn" id="recBtn" data-i18n-aria="rec.start" data-i18n-title="rec.startTitle"><i data-icon="mic"></i></button>
     <div class="trio">
-      <button class="circ off" id="metroBtn" aria-pressed="false" aria-label="节拍器" title="节拍器"><i data-icon="metronome"></i></button>
-      <button class="circ" id="uploadBtn" aria-label="上传录音" title="上传录音"><i data-icon="upload"></i></button>
-      <button class="circ" id="langBtn" aria-label="语言" title="语言"><i data-icon="languages"></i></button>
+      <button class="circ off" id="metroBtn" aria-pressed="false" data-i18n-label="metro"><i data-icon="metronome"></i></button>
+      <button class="circ" id="uploadBtn" data-i18n-label="upload"><i data-icon="upload"></i></button>
+      <button class="circ" id="langBtn" data-i18n-label="lang"><i data-icon="languages"></i></button>
     </div>
     <div class="stepper" id="bpmRow" hidden>
-      <button id="bpmDown" aria-label="减慢"><i data-icon="minus"></i></button><output id="bpmOut" class="num">100</output><button id="bpmUp" aria-label="加快"><i data-icon="plus"></i></button>
+      <button id="bpmDown" data-i18n-aria="slower"><i data-icon="minus"></i></button><output id="bpmOut" class="num">100</output><button id="bpmUp" data-i18n-aria="faster"><i data-icon="plus"></i></button>
     </div>
     <input type="file" id="fileInput" accept="audio/*,video/*" hidden>
   </main>
@@ -379,9 +382,9 @@ a.pill { text-decoration: none; justify-content: center; }
   <main class="rec-main">
     <div class="rec-top"><div class="big-note quiet" id="bigNote">–</div><div class="beats" id="beatDots" hidden><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
     <div class="card live" id="live"><canvas id="liveCv"></canvas></div>
-    <div class="pads" id="recPads"><button class="pad" data-k="clap"><i data-icon="drum"></i><span>军鼓</span></button><button class="pad" data-k="snap"><i data-icon="hihat"></i><span>踩镲</span></button></div>
+    <div class="pads" id="recPads"><button class="pad" data-k="clap"><i data-icon="drum"></i><span data-i18n="snare"></span></button><button class="pad" data-k="snap"><i data-icon="hihat"></i><span data-i18n="hihat"></span></button></div>
     <div class="stopbar">
-      <button class="stop-btn" id="stopBtn" aria-label="停止" title="停止（回车）"><i data-icon="stop"></i></button>
+      <button class="stop-btn" id="stopBtn" data-i18n-aria="rec.stop" data-i18n-title="rec.stopTitle"><i data-icon="stop"></i></button>
       <div class="timer"><i></i><span id="timer">0:00</span></div>
     </div>
   </main>
@@ -391,14 +394,14 @@ a.pill { text-decoration: none; justify-content: center; }
 <section class="screen" id="work" hidden>
   <header class="work-head">
     <div class="actions">
-      <button class="circ" id="reBtn" aria-label="重新录" title="重新录"><i data-icon="rotate"></i></button>
-      <button class="circ" id="dlBtn" aria-label="下载" title="下载"><i data-icon="download"></i></button>
-      <button class="pill dark" id="sunoBtn" hidden><i data-icon="sparkle"></i>用 Suno 渲染！</button>
+      <button class="circ" id="reBtn" data-i18n-label="rec.again"><i data-icon="rotate"></i></button>
+      <button class="circ" id="dlBtn" data-i18n-label="download"><i data-icon="download"></i></button>
+      <button class="pill dark" id="sunoBtn" hidden><i data-icon="sparkle"></i><span data-i18n="suno.render"></span></button>
     </div>
   </header>
   <div class="toolbar">
     <div class="tl">
-      <button class="play-btn" id="playBtn" aria-label="播放" title="播放（空格）"></button>
+      <button class="play-btn" id="playBtn" data-i18n-aria="play" data-i18n-title="playTitle"></button>
       <span class="time" id="time">0:00 / 0:00</span>
       <button class="chip" id="keyChip"><span></span><i data-icon="chev"></i></button>
       <button class="chip num" id="tempoChip"><span></span><i data-icon="chev"></i></button>
@@ -406,7 +409,7 @@ a.pill { text-decoration: none; justify-content: center; }
     <div class="tr">
       <div class="tr" id="preArrange">
         <button class="chip" id="styleChip"><span></span><i data-icon="chev"></i></button>
-        <button class="pill accent" id="arrangeBtn"><i data-icon="sparkle"></i><span>编曲</span></button>
+        <button class="pill accent" id="arrangeBtn"><i data-icon="sparkle"></i><span data-i18n="arrange"></span></button>
       </div>
       <div class="seg" id="styleSeg" hidden></div>
     </div>
@@ -416,14 +419,14 @@ a.pill { text-decoration: none; justify-content: center; }
     <div class="arr-scroll" id="arrScroll"><div class="arr-tl" id="arrTl"></div></div>
     <div class="arr-bar" id="arrBar" hidden><div class="track"><div class="thumb"></div></div></div>
   </div>
-  <div class="editor-hint" id="editorHint">点击段落来编辑</div>
+  <div class="editor-hint" id="editorHint" data-i18n="hint.edit"></div>
   <div class="card editor" id="editor" hidden>
     <div class="ed-head">
       <div class="ed-title"><i class="dot" id="edDot"></i><span id="edTitle"></span><button class="chip" id="edInst" hidden><span></span><i data-icon="chev"></i></button></div>
       <div class="ed-tools">
-        <button class="tool" id="edCopy" aria-label="复制段落" title="复制段落"><i data-icon="copy"></i></button>
-        <button class="tool" id="edDel" aria-label="删除" title="删除"><i data-icon="trash"></i></button>
-        <button class="tool" id="edClose" aria-label="关闭" title="关闭"><i data-icon="x"></i></button>
+        <button class="tool" id="edCopy" data-i18n-label="ed.copy"><i data-icon="copy"></i></button>
+        <button class="tool" id="edDel" data-i18n-label="delete"><i data-icon="trash"></i></button>
+        <button class="tool" id="edClose" data-i18n-label="close"><i data-icon="x"></i></button>
       </div>
     </div>
     <div class="ed-body" id="edBody"></div>
@@ -432,45 +435,45 @@ a.pill { text-decoration: none; justify-content: center; }
 
 <div class="modal" id="addModal" hidden>
   <div class="sheet add-sheet" role="dialog" aria-labelledby="addTitle">
-    <div class="sheet-head"><h2 id="addTitle">添加段落</h2><button class="tool" id="addClose" aria-label="关闭"><i data-icon="x"></i></button></div>
+    <div class="sheet-head"><h2 id="addTitle" data-i18n="add.title"></h2><button class="tool" id="addClose" data-i18n-aria="close"><i data-icon="x"></i></button></div>
     <div class="add-fields">
-      <div class="field"><span>段落</span><div class="seg" id="addName"></div></div>
-      <div class="field"><span>乐器</span><div class="seg" id="addInst"></div></div>
-      <div class="field"><span>节拍</span><button class="circ sm" id="addMetro" aria-pressed="true" aria-label="节拍器" title="节拍器"><i data-icon="metronome"></i></button>
-        <div class="stepper" id="addBpmRow"><button id="addBpmDown" aria-label="减慢"><i data-icon="minus"></i></button><output id="addBpmOut" class="num">100</output><button id="addBpmUp" aria-label="加快"><i data-icon="plus"></i></button></div></div>
+      <div class="field"><span data-i18n="add.section"></span><div class="seg" id="addName"></div></div>
+      <div class="field"><span data-i18n="add.inst"></span><div class="seg" id="addInst"></div></div>
+      <div class="field"><span data-i18n="add.beat"></span><button class="circ sm" id="addMetro" aria-pressed="true" data-i18n-label="metro"><i data-icon="metronome"></i></button>
+        <div class="stepper" id="addBpmRow"><button id="addBpmDown" data-i18n-aria="slower"><i data-icon="minus"></i></button><output id="addBpmOut" class="num">100</output><button id="addBpmUp" data-i18n-aria="faster"><i data-icon="plus"></i></button></div></div>
     </div>
     <div class="add-mid">
-      <button class="pad" data-k="clap"><i data-icon="drum"></i><span>军鼓</span></button>
+      <button class="pad" data-k="clap"><i data-icon="drum"></i><span data-i18n="snare"></span></button>
       <div class="rec-area" id="addArea"><canvas id="addCv"></canvas>
         <div class="note-box"><div class="note" id="addNote"></div><div class="beats sm" id="addBeats" hidden><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
-        <div class="rec-ctl"><button class="rec-sm" id="addRec" aria-label="开始录音"><i data-icon="mic"></i></button><div class="timer" id="addTimerWrap" hidden><i></i><span id="addTimer">0:00</span></div></div>
-        <div class="backing" id="addBackingWrap">伴奏 <button class="switch" id="addBacking" role="switch" aria-checked="true" aria-label="伴奏"></button></div>
+        <div class="rec-ctl"><button class="rec-sm" id="addRec" data-i18n-aria="rec.start"><i data-icon="mic"></i></button><div class="timer" id="addTimerWrap" hidden><i></i><span id="addTimer">0:00</span></div></div>
+        <div class="backing" id="addBackingWrap"><span data-i18n="add.backing"></span> <button class="switch" id="addBacking" role="switch" aria-checked="true" data-i18n-aria="add.backing"></button></div>
       </div>
-      <button class="pad" data-k="snap"><i data-icon="hihat"></i><span>踩镲</span></button>
+      <button class="pad" data-k="snap"><i data-icon="hihat"></i><span data-i18n="hihat"></span></button>
     </div>
-    <div class="sheet-foot"><button class="pill outline" id="addCancel">取消</button><button class="pill dark" id="addOk" disabled>添加</button></div>
+    <div class="sheet-foot"><button class="pill outline" id="addCancel" data-i18n="add.cancel"></button><button class="pill dark" id="addOk" data-i18n="add.ok" disabled></button></div>
   </div>
 </div>
 
 <div class="modal" id="sunoModal" hidden>
   <div class="sheet" role="dialog" aria-labelledby="sunoTitle" style="width:min(560px,100%)">
-    <div class="sheet-head"><h2 id="sunoTitle">用 Suno 生成</h2><button class="tool" id="sunoClose" aria-label="关闭"><i data-icon="x"></i></button></div>
+    <div class="sheet-head"><h2 id="sunoTitle" data-i18n="suno.title"></h2><button class="tool" id="sunoClose" data-i18n-aria="close"><i data-icon="x"></i></button></div>
     <div class="steps">
-      <div class="step"><span class="n">1</span><div class="c"><b>音频</b><div class="row"><div class="seg" id="sunoSrc"><button data-v="voice" aria-pressed="true">原声哼唱</button><button data-v="mix" aria-pressed="false">我们的编曲</button></div><button class="pill outline" id="sunoDl"><i data-icon="download"></i>下载</button></div></div></div>
-      <div class="step"><span class="n">2</span><div class="c"><b>风格提示词</b><div class="prompt"><p id="sunoPrompt"></p><button id="sunoCopy" aria-label="复制"><i data-icon="copy"></i></button></div></div></div>
-      <div class="step"><span class="n">3</span><div class="c"><a class="pill dark" href="https://suno.com/create" target="_blank" rel="noopener"><i data-icon="external"></i>打开 Suno</a></div></div>
+      <div class="step"><span class="n">1</span><div class="c"><b data-i18n="suno.audio"></b><div class="row"><div class="seg" id="sunoSrc"><button data-v="voice" aria-pressed="true" data-i18n="suno.voice"></button><button data-v="mix" aria-pressed="false" data-i18n="suno.mix"></button></div><button class="pill outline" id="sunoDl"><i data-icon="download"></i><span data-i18n="download"></span></button></div></div></div>
+      <div class="step"><span class="n">2</span><div class="c"><b data-i18n="suno.prompt"></b><div class="prompt"><p id="sunoPrompt"></p><button id="sunoCopy" data-i18n-aria="copy"><i data-icon="copy"></i></button></div></div></div>
+      <div class="step"><span class="n">3</span><div class="c"><a class="pill dark" href="https://suno.com/create" target="_blank" rel="noopener"><i data-icon="external"></i><span data-i18n="suno.open"></span></a></div></div>
     </div>
   </div>
 </div>
 
 <div class="modal" id="quitModal" hidden>
   <div class="sheet confirm" role="alertdialog" aria-labelledby="quitTitle">
-    <h2 id="quitTitle">放弃这次录音？</h2>
-    <div class="sheet-foot"><button class="pill outline" id="quitNo">继续录音</button><button class="pill danger" id="quitYes">放弃<span class="kbd">Esc</span></button></div>
+    <h2 id="quitTitle" data-i18n="quit.title"></h2>
+    <div class="sheet-foot"><button class="pill outline" id="quitNo" data-i18n="quit.no"></button><button class="pill danger" id="quitYes"><span data-i18n="quit.yes"></span><span class="kbd">Esc</span></button></div>
   </div>
 </div>
 
-<button class="ins-pin" id="insPin" hidden aria-label="在这里插入段落" title="插入段落"><svg viewBox="0 0 26 34" aria-hidden="true"><path d="M13 34C13 34 0 21.5 0 13a13 13 0 0 1 26 0c0 8.5-13 21-13 21Z" fill="currentColor"/><path d="M13 7.5v11M7.5 13h11" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+<button class="ins-pin" id="insPin" hidden data-i18n-aria="ins.aria" data-i18n-title="ins.title"><svg viewBox="0 0 26 34" aria-hidden="true"><path d="M13 34C13 34 0 21.5 0 13a13 13 0 0 1 26 0c0 8.5-13 21-13 21Z" fill="currentColor"/><path d="M13 7.5v11M7.5 13h11" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg></button>
 <div class="rotate" id="rotateOverlay" hidden>
   <svg viewBox="0 0 80 76" fill="none" aria-hidden="true">
     <rect x="3" y="16" width="32" height="56" rx="5" stroke="var(--trace)" stroke-width="2.5" stroke-dasharray="5 4"/>
@@ -479,8 +482,8 @@ a.pill { text-decoration: none; justify-content: center; }
     <path d="M40 4c9 0 16 4 20 12" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round"/>
     <path d="m53 13 7 4 2-8" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>
-  <h2>横过来编辑</h2>
-  <button class="link" id="rotateSkip">保持竖屏</button>
+  <h2 data-i18n="rotate.title"></h2>
+  <button class="link" id="rotateSkip" data-i18n="rotate.skip"></button>
 </div>
 <div class="menu" id="menu" hidden></div>
 
@@ -488,10 +491,11 @@ a.pill { text-decoration: none; justify-content: center; }
 <div class="analyzing" id="analyzing" hidden><div class="spinner"></div></div>
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="js/theory.js"></script>
-<script src="js/dsp.js"></script>
-<script src="js/synth.js"></script>
-<script src="js/arrange.js"></script>
-<script src="js/app.js"></script>
+<script src="js/i18n.js?v=2026-10-04"></script>
+<script src="js/theory.js?v=2026-10-04"></script>
+<script src="js/dsp.js?v=2026-10-04"></script>
+<script src="js/synth.js?v=2026-10-04"></script>
+<script src="js/arrange.js?v=2026-10-04"></script>
+<script src="js/app.js?v=2026-10-04"></script>
 </body>
 </html>

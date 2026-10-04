@@ -10,7 +10,7 @@ python -m http.server 8766 --bind 127.0.0.1
 
 然后打开 http://127.0.0.1:8766/v2/ 。麦克风只能在 `localhost`、`127.0.0.1` 或 HTTPS 下使用。直接双击打开 `file://` 时页面也能跑，但麦克风是否可用取决于浏览器。
 
-没有构建步骤。改完 JS 后先检查语法：
+没有构建步骤。改完 JS 后先检查语法，并把 `v2/index.html` 里脚本的 `?v=` 版本号改掉（见 ARCHITECTURE“脚本缓存”）：
 
 ```bash
 for f in v2/js/*.js; do node --check "$f"; done

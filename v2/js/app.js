@@ -8,7 +8,9 @@
   const fmt = s => { s = Math.max(0, s); return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); };
   const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const HAND = 'M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15';
+  // display names (the data keeps ids / Chinese section names; see i18n.js)
+  const keyName = k => t(k.mode === 'major' ? 'key.major' : 'key.minor', { k: Theory.pcName(k.tonic, k) });
+  const styleName = id => t('style.' + id), instName = id => t('inst.' + id);
   const ICONS = {
     mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>',
     metronome: '<path d="M9.2 3h5.6l4.2 18H5L9.2 3Z"/><path d="m12 16 4.5-8.5"/><path d="M7 16h10"/>',
@@ -16,8 +18,6 @@
     download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
     languages: '<path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>',
     speech: '<path d="M8.8 20v-4.1l1.9.2a2.3 2.3 0 0 0 2.164-2.1V8.3A5.37 5.37 0 0 0 2 8.25c0 2.8.656 3.054 1 4.55a5.77 5.77 0 0 1 .029 2.758L2 20"/><path d="M19.8 17.8a7.5 7.5 0 0 0 .003-10.603"/><path d="M17 15a3.5 3.5 0 0 0-.025-4.975"/>',
-    clap: `<g transform="translate(0.5 5.5) rotate(18 6 9) scale(0.62)" stroke-width="3.2"><path d="${HAND}"/></g><g transform="translate(23.5 5.5) scale(-1 1) rotate(18 6 9) scale(0.62)" stroke-width="3.2"><path d="${HAND}"/></g><path d="M12 1.5v2.2"/><path d="M8.3 2.6l1 1.7"/><path d="M15.7 2.6l-1 1.7"/>`,
-    snap: `<g transform="translate(0 5.5) scale(0.76)" stroke-width="2.6"><path d="${HAND}"/></g><path d="M19.5 1.8v2.6"/><path d="M22.4 5h-2.6"/><path d="M22 2.3l-1.7 1.7"/>`,
     piano: '<path d="M18.5 8c-1.4 0-2.6-.8-3.2-2A6.87 6.87 0 0 0 2 9v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-8.5C22 9.6 20.4 8 18.5 8"/><path d="M2 14h20"/><path d="M6 14v4"/><path d="M10 14v4"/><path d="M14 14v4"/><path d="M18 14v4"/>',
     drum: '<path d="m2 2 8 8"/><path d="m22 2-8 8"/><ellipse cx="12" cy="9" rx="10" ry="5"/><path d="M7 13.4v7.9"/><path d="M12 14v8"/><path d="M17 13.4v7.9"/><path d="M2 9v8a10 5 0 0 0 20 0V9"/>',
     keyboard: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M7 16h10"/>',
@@ -55,7 +55,8 @@
 
   /* ---------------- state ---------------- */
   const prefs = (() => { try { return JSON.parse(localStorage.getItem('hum2-prefs')) || {}; } catch (e) { return {}; } })();
-  prefs.metronome = !!prefs.metronome; prefs.bpm = prefs.bpm || 100;
+  prefs.metronome = !!prefs.metronome; prefs.bpm = prefs.bpm || 100; if (!LANGS.some(l => l[0] === prefs.lang)) prefs.lang = 'zh';
+  setLang(prefs.lang);
   const savePrefs = () => { try { localStorage.setItem('hum2-prefs', JSON.stringify(prefs)); } catch (e) {} };
   let song = null, sel = null, playhead = 0, preArrange = null;
   const takes = new Map();
@@ -67,7 +68,7 @@
   function redo() { if (!hist.redo.length) return; hist.undo.push(snapshot()); song = JSON.parse(hist.redo.pop()); afterChange(); }
   const findSec = id => song && song.sections.find(s => s.id === id);
   // a phone (not just a narrow window): used for the landscape layout and the rotate prompt
-  const isPhone = () => matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 600;
+  const isPhone = () => matchMedia('(pointer: coarse)').matches && Math.min(window.screen.width, window.screen.height) < 600;
   const landPhone = () => matchMedia('(orientation: landscape) and (max-height: 500px)').matches; // same query as the CSS
   function afterChange(anim) {
     if (sel && !findSec(sel.sec)) sel = null;
@@ -106,19 +107,18 @@
   $('#bpmUp').addEventListener('click', () => { prefs.bpm = clamp(prefs.bpm + 5, 40, 240); savePrefs(); syncHome(); });
   $('#uploadBtn').addEventListener('click', () => $('#fileInput').click());
   $('#langBtn').addEventListener('click', e => openMenu(e.currentTarget, m => {
-    item(m, icon('check') + '中文', closeMenu);
-    item(m, '<span style="width:16px"></span>English', closeMenu, { disabled: true });
-    item(m, '<span style="width:16px"></span>Deutsch', closeMenu, { disabled: true });
+    for (const [id, name] of LANGS) item(m, (id === getLang() ? icon('check') : '<span style="width:16px"></span>') + name, () => { closeMenu(); chooseLang(id); });
   }, 'left'));
+  function chooseLang(id) { if (id === getLang()) return; prefs.lang = id; savePrefs(); setLang(id); syncHome(); if (screen === 'work') renderWork(); }
   $('#fileInput').addEventListener('change', async e => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     $('#analyzing').hidden = false;
     try {
       const S = Synth.ctx(), buf = await S.c.decodeAudioData(await f.arrayBuffer());
       const mono = await toMonoBuffer(buf), res = await analyzeTake(mono, null);
-      if (!res) { toast('没有听出旋律。换一段更清楚的录音试试。'); return; }
+      if (!res) { toast(t('toast.noMelodyClear')); return; }
       newSong(res, mono);
-    } catch (err) { console.error(err); toast('这个文件打不开。换成 mp3、m4a 或 wav 再试。'); }
+    } catch (err) { console.error(err); toast(t('toast.badFile')); }
     finally { $('#analyzing').hidden = true; }
   });
   syncHome();
@@ -128,7 +128,7 @@
     const S = Synth.ctx(), c = S.c, sr = c.sampleRate;
     let stream;
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }); }
-    catch (e) { toast('无法使用麦克风。可以先用手机录一段，再上传。'); return null; }
+    catch (e) { toast(t('toast.noMic')); return null; }
     const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 2048; src.connect(an);
     const proc = c.createScriptProcessor(4096, 1, 1), mute = c.createGain(); mute.gain.value = 0;
     const R = { S, c, sr, stream, src, an, proc, mute, chunks: [], n: 0, firstCtx: null, opts, live: { pitch: [], hits: [] }, taps: [], buf: new Float32Array(2048), d: new Float32Array(1100),
@@ -342,7 +342,7 @@
     $('#analyzing').hidden = false;
     try {
       const res = await analyzeTake(out.buffer, out.info, out.taps);
-      if (!res) { toast('没有听出旋律。离麦克风近一点再试。'); show('home'); return; }
+      if (!res) { toast(t('toast.noMelodyClose')); show('home'); return; }
       newSong(res, out.buffer);
       promptRotate();
     } finally { $('#analyzing').hidden = true; }
@@ -374,13 +374,13 @@
   function lanes() {
     const out = [], insts = [];
     for (const s of song.sections) if (s.melody && !insts.includes(s.melody.inst)) insts.push(s.melody.inst);
-    for (const i of insts) out.push({ id: 'melody:' + i, kind: 'melody', inst: i, label: Arrange.instLabel(i), color: instColor(i) });
-    if (song.sections.some(s => s.hits.some(h => h.k === 'clap'))) out.push({ id: 'clap', kind: 'hits', hit: 'clap', label: '军鼓', color: '--hits' });
-    if (song.sections.some(s => s.hits.some(h => h.k === 'snap'))) out.push({ id: 'snap', kind: 'hits', hit: 'snap', label: '踩镲', color: '--hits' });
+    for (const i of insts) out.push({ id: 'melody:' + i, kind: 'melody', inst: i, label: instName(i), color: instColor(i) });
+    if (song.sections.some(s => s.hits.some(h => h.k === 'clap'))) out.push({ id: 'clap', kind: 'hits', hit: 'clap', label: t('snare'), color: '--hits' });
+    if (song.sections.some(s => s.hits.some(h => h.k === 'snap'))) out.push({ id: 'snap', kind: 'hits', hit: 'snap', label: t('hihat'), color: '--hits' });
     if (song.arranged) {
-      out.push({ id: 'chords', kind: 'chords', label: '和弦', color: '--chords', auto: true });
-      out.push({ id: 'bass', kind: 'auto', label: '贝斯', color: '--bass', auto: true });
-      if (Arrange.STYLES[song.style].drums) out.push({ id: 'drums', kind: 'auto', label: '鼓', color: '--kit', auto: true });
+      out.push({ id: 'chords', kind: 'chords', label: t('lane.chords'), color: '--chords', auto: true });
+      out.push({ id: 'bass', kind: 'auto', label: t('lane.bass'), color: '--bass', auto: true });
+      if (Arrange.STYLES[song.style].drums) out.push({ id: 'drums', kind: 'auto', label: t('lane.drums'), color: '--kit', auto: true });
     }
     return out;
   }
@@ -388,16 +388,16 @@
 
   function renderWork(anim) {
     if (!song || screen !== 'work') return;
-    $('#keyChip span').textContent = Theory.keyLabel(song.key);
+    $('#keyChip span').textContent = keyName(song.key);
     $('#tempoChip span').textContent = '♩ ' + song.bpm;
-    $('#styleChip span').textContent = Arrange.STYLES[song.style].label;
-    // before arranging: style chip + 编曲; after: the style bar (on a landscape phone the chip stays instead, via CSS)
+    $('#styleChip span').textContent = styleName(song.style);
+    // before arranging: style chip + the Arrange button; after: the style bar (on a landscape phone the chip stays instead, via CSS)
     $('#work').classList.toggle('arranged', song.arranged && !arranging);
     $('#arrangeBtn').hidden = song.arranged && !arranging;
     $('#styleSeg').hidden = !song.arranged || arranging;
     $('#sunoBtn').hidden = !song.arranged || arranging;
     const seg = $('#styleSeg'); seg.innerHTML = '';
-    for (const id of Arrange.STYLE_ORDER) { const b = document.createElement('button'); b.textContent = Arrange.STYLES[id].label; b.setAttribute('aria-pressed', id === song.style); b.addEventListener('click', () => { if (song.style === id) return; commit(() => { song.style = id; }, 'style'); }); seg.appendChild(b); }
+    for (const id of Arrange.STYLE_ORDER) { const b = document.createElement('button'); b.textContent = styleName(id); b.setAttribute('aria-pressed', id === song.style); b.addEventListener('click', () => { if (song.style === id) return; commit(() => { song.style = id; }, 'style'); }); seg.appendChild(b); }
     setPlayIcon();
     renderArr(anim);
     renderEditor();
@@ -421,9 +421,9 @@
     ls.forEach((ln, i) => {
       const d = document.createElement('div'); d.className = 'lane-label' + (song.mute[ln.id] ? ' muted' : ''); d.style.height = L.laneH + 'px';
       if (anim === 'arrange' && ln.auto) { d.classList.add('lane-enter'); d.style.setProperty('--i', i - firstAuto); }
-      d.innerHTML = `<i class="dot" style="background:var(${ln.color})"></i><button class="name${ln.kind === 'melody' ? ' drop' : ''}">${ln.label}${ln.kind === 'melody' ? icon('chev') : ''}</button><button class="mute" aria-label="静音">${icon(song.mute[ln.id] ? 'mute' : 'volume')}</button>`;
+      d.innerHTML = `<i class="dot" style="background:var(${ln.color})"></i><button class="name${ln.kind === 'melody' ? ' drop' : ''}">${ln.label}${ln.kind === 'melody' ? icon('chev') : ''}</button><button class="mute" aria-label="${t('mute')}">${icon(song.mute[ln.id] ? 'mute' : 'volume')}</button>`;
       if (ln.kind === 'melody') d.querySelector('.name').addEventListener('click', e => openMenu(e.currentTarget, m => {
-        for (const [id, lab] of Arrange.MELODY_INSTS) item(m, (id === ln.inst ? icon('check') : '<span style="width:16px"></span>') + lab, () => { closeMenu(); if (id !== ln.inst) commit(() => song.sections.forEach(s => { if (s.melody && s.melody.inst === ln.inst) s.melody.inst = id; })); });
+        for (const [id] of Arrange.MELODY_INSTS) item(m, (id === ln.inst ? icon('check') : '<span style="width:16px"></span>') + instName(id), () => { closeMenu(); if (id !== ln.inst) commit(() => song.sections.forEach(s => { if (s.melody && s.melody.inst === ln.inst) s.melody.inst = id; })); });
       }, 'left'));
       d.querySelector('.mute').addEventListener('click', () => { song.mute[ln.id] = !song.mute[ln.id]; renderArr(); if (player) refreshPlayer(); });
       labels.appendChild(d);
@@ -431,7 +431,7 @@
     const add = (cls, style, html = '') => { const e = document.createElement('div'); e.className = cls; for (const [k, v] of Object.entries(style)) k.startsWith('--') ? e.style.setProperty(k, v) : (e.style[k] = v); e.innerHTML = html; tl.appendChild(e); return e; };
     add('sec-row', { width: W + 'px' });
     song.sections.forEach((s, i) => {
-      const e = add('sec' + (sel && sel.type === 'section' && sel.sec === s.id ? ' selected' : ''), { left: st[i] * L.bw + 'px', width: s.bars * L.bw + 'px' }, `<span class="grip">${icon('grip')}</span><span>${s.name}</span>`);
+      const e = add('sec' + (sel && sel.type === 'section' && sel.sec === s.id ? ' selected' : ''), { left: st[i] * L.bw + 'px', width: s.bars * L.bw + 'px' }, `<span class="grip">${icon('grip')}</span><span>${secName(s.name)}</span>`);
       e.dataset.sec = s.id;
       if (anim === 'arrange' && s.role !== 'rec') e.classList.add('enter');
     });
@@ -473,7 +473,7 @@
         }
       }
     });
-    const tile = add('add-sec', { left: total * L.bw + 10 + 'px', top: '7px', height: H - 14 + 'px' }, icon('plus') + '<span>段落</span>');
+    const tile = add('add-sec', { left: total * L.bw + 10 + 'px', top: '7px', height: H - 14 + 'px' }, icon('plus') + '<span>' + t('sec.add') + '</span>');
     tile.addEventListener('click', () => openAdd());
     if ((anim === 'arrange' || anim === 'style') && firstAuto >= 0) {
       const t = L.secH + firstAuto * L.laneH, h = (ls.length - firstAuto) * L.laneH;
@@ -689,17 +689,17 @@
     const instChip = $('#edInst'); instChip.hidden = true;
     if (type === 'melody') {
       $('#edDot').style.background = `var(${instColor(s.melody.inst)})`;
-      $('#edTitle').textContent = '旋律 · ' + s.name;
-      instChip.hidden = false; instChip.querySelector('span').textContent = Arrange.instLabel(s.melody.inst);
+      $('#edTitle').textContent = t('ed.melody', { sec: secName(s.name) });
+      instChip.hidden = false; instChip.querySelector('span').textContent = instName(s.melody.inst);
       buildPianoRoll(body, s);
     } else if (type === 'hits') {
-      $('#edDot').style.background = 'var(--hits)'; $('#edTitle').textContent = '节奏 · ' + s.name;
+      $('#edDot').style.background = 'var(--hits)'; $('#edTitle').textContent = t('ed.rhythm', { sec: secName(s.name) });
       buildHitGrid(body, s);
     } else if (type === 'chord') {
       const bar = sel.type === 'chord' ? sel.bar : 0;
-      $('#edDot').style.background = 'var(--chords)'; $('#edTitle').textContent = `和弦 · ${s.name} 第 ${bar + 1} 小节`;
+      $('#edDot').style.background = 'var(--chords)'; $('#edTitle').textContent = t('ed.chord', { sec: secName(s.name), n: bar + 1 });
       buildChordPicker(body, s, bar);
-    } else { $('#edDot').style.background = 'var(--muted)'; $('#edTitle').textContent = s.name; }
+    } else { $('#edDot').style.background = 'var(--muted)'; $('#edTitle').textContent = secName(s.name); }
     $('#edDel').hidden = type === 'chord' && sel.type === 'chord';
   }
   $('#edClose').addEventListener('click', () => select(null));
@@ -711,13 +711,13 @@
   });
   $('#edDel').addEventListener('click', () => {
     const s = findSec(sel.sec); if (!s) return;
-    if (sel.type === 'section') { if (song.sections.length <= 1) return toast('至少要保留一个段落。'); commit(() => song.sections.splice(song.sections.indexOf(s), 1)); return select(null); }
+    if (sel.type === 'section') { if (song.sections.length <= 1) return toast(t('toast.lastSection')); commit(() => song.sections.splice(song.sections.indexOf(s), 1)); return select(null); }
     if (sel.type === 'melody') commit(() => { s.melody = null; });
     if (sel.type === 'hits') commit(() => { s.hits = []; });
     select(null);
   });
   $('#edInst').addEventListener('click', e => { const s = findSec(sel.sec); openMenu(e.currentTarget, m => {
-    for (const [id, lab] of Arrange.MELODY_INSTS) item(m, (id === s.melody.inst ? icon('check') : '<span style="width:16px"></span>') + lab, () => { closeMenu(); commit(() => { s.melody.inst = id; }); });
+    for (const [id] of Arrange.MELODY_INSTS) item(m, (id === s.melody.inst ? icon('check') : '<span style="width:16px"></span>') + instName(id), () => { closeMenu(); commit(() => { s.melody.inst = id; }); });
   }, 'left'); });
 
   /* Piano roll (Figma 31): a ruler with bar numbers on top, keys on the left, the note grid scrolling sideways. The
@@ -761,7 +761,7 @@
         else { n.s = clamp(orig.s + db, 0, pr.beats - n.d); n.p = clamp(orig.p + dp, 24, 108); }
         changed = n.s !== orig.s || n.p !== orig.p || n.d !== orig.d;
         if (n.p !== lastP) { lastP = n.p; Synth.play(Synth.ctx(), Synth.ctx().input, { inst: pr.s.melody.inst, m: n.p, t: Synth.ctx().c.currentTime + .01, d: .3, v: .6 }); }
-        tip.textContent = resize ? (n.d + ' 拍') : (n.p === orig.p ? Theory.noteName(n.p) : Theory.noteName(orig.p) + ' → ' + Theory.noteName(n.p));
+        tip.textContent = resize ? t(n.d === 1 ? 'tip.beat' : 'tip.beats', { n: n.d }) : (n.p === orig.p ? Theory.noteName(n.p) : Theory.noteName(orig.p) + ' → ' + Theory.noteName(n.p));
         const ny = (pr.hi - n.p) * pr.rh, bodyR = $('#edBody').getBoundingClientRect(), cvR = pr.cv.getBoundingClientRect();
         tip.style.left = cvR.left - bodyR.left + n.s * pr.ppb + 'px'; tip.style.top = Math.max(2, cvR.top - bodyR.top + ny - 30) + 'px';
         drawPR(); // the arrangement preview refreshes on pointerup via afterChange()
@@ -809,15 +809,15 @@
   }
   function buildHitGrid(body, s) {
     const wrap = document.createElement('div'); wrap.className = 'grid-ed';
-    for (const [k, lab] of [['clap', '军鼓'], ['snap', '踩镲']]) {
+    for (const [k, lab] of [['clap', t('snare')], ['snap', t('hihat')]]) {
       const row = document.createElement('div'); row.className = 'grid-row'; row.innerHTML = `<span>${lab}</span>`;
       const cells = document.createElement('div'); cells.className = 'cells';
       for (let b = 0; b < s.bars; b++) {
-        const bar = document.createElement('div'); bar.className = 'bar';
+        const bar = document.createElement('div'); bar.className = 'bar'; const cellLab = n => t('ed.cell', { lab, bar: b + 1, n });
         for (let i = 0; i < 16; i++) {
           const t = b * 4 + i / 4, on = s.hits.some(h => h.k === k && Math.abs(h.t - t) < .01);
           const c = document.createElement('button'); c.className = 'cell' + (on ? ' on' : '') + (Math.floor(i / 4) % 2 ? ' beat2' : '');
-          c.setAttribute('aria-label', `${lab} 第 ${b + 1} 小节 第 ${i + 1} 格`);
+          c.setAttribute('aria-label', cellLab(i + 1));
           c.addEventListener('click', () => {
             commit(() => { const j = s.hits.findIndex(h => h.k === k && Math.abs(h.t - t) < .01); if (j >= 0) s.hits.splice(j, 1); else { s.hits.push({ t, k }); s.hits.sort((a, c2) => a.t - c2.t); } });
             if (!s.hits.some(h => h.k === k && Math.abs(h.t - t) < .01)) return;
@@ -845,8 +845,8 @@
     for (const c of Theory.diatonic(song.key)) { const b = document.createElement('button'); b.className = 'cbtn' + (c.name === base ? ' on' : ''); b.innerHTML = `${c.name}<small>${c.roman}</small>`; b.addEventListener('click', () => setChord(s, bar, c.name)); row1.appendChild(b); }
     const row2 = document.createElement('div'); row2.className = 'row';
     for (const name of Theory.extras(song.key)) { const b = document.createElement('button'); b.className = 'cbtn sm' + (name === base ? ' on' : ''); b.textContent = name; b.addEventListener('click', () => setChord(s, bar, name)); row2.appendChild(b); }
-    const row3 = document.createElement('div'); row3.className = 'row bass-row'; row3.innerHTML = '<span class="lbl">低音</span>';
-    const triad = ['', 'm', 'dim', 'aug'].includes(cp.q), roles = ['根音', '三音', '五音'], rootName = /^[A-G][#b]?/.exec(base)[0];
+    const row3 = document.createElement('div'); row3.className = 'row bass-row'; row3.innerHTML = '<span class="lbl">' + t('chord.bass') + '</span>';
+    const triad = ['', 'm', 'dim', 'aug'].includes(cp.q), roles = [t('chord.root'), t('chord.third'), t('chord.fifth')], rootName = /^[A-G][#b]?/.exec(base)[0];
     Theory.tones(base).forEach((pc, i) => {
       const nm = pc === cp.root ? rootName : Theory.pcName(pc, song.key, rootName[1] === 'b'), name = pc === cp.root ? base : base + '/' + nm;
       const b = document.createElement('button'); b.className = 'cbtn xs' + (pc === cp.bass ? ' on' : '');
@@ -862,7 +862,7 @@
 
   /* ---------------- playback ---------------- */
   let player = null;
-  function setPlayIcon() { $('#playBtn').innerHTML = icon(player ? 'pause' : 'play'); $('#playBtn').setAttribute('aria-label', player ? '暂停' : '播放'); }
+  function setPlayIcon() { $('#playBtn').innerHTML = icon(player ? 'pause' : 'play'); $('#playBtn').setAttribute('aria-label', t(player ? 'pause' : 'play')); }
   function updateTime() { if (!song) return; const spb = 60 / song.bpm; $('#time').textContent = fmt(playhead * spb) + ' / ' + fmt(starts().total * 4 * spb); }
   function startPlay() {
     if (!song) return;
@@ -921,33 +921,33 @@
     if (arranging || song.arranged) return;
     preArrange = snapshot();
     arranging = true;
-    const btn = $('#arrangeBtn'); btn.classList.add('working'); btn.innerHTML = '<span class="spin"></span><span>编曲中</span>';
+    const btn = $('#arrangeBtn'); btn.classList.add('working'); btn.innerHTML = '<span class="spin"></span><span data-i18n="arranging"></span>'; applyI18n(btn);
     commit(() => Arrange.arrange(song), 'arrange');
-    setTimeout(() => { arranging = false; btn.classList.remove('working'); btn.innerHTML = icon('sparkle') + '<span>编曲</span>'; renderWork(); }, 1700);
+    setTimeout(() => { arranging = false; btn.classList.remove('working'); btn.innerHTML = icon('sparkle') + '<span data-i18n="arrange"></span>'; applyI18n(btn); renderWork(); }, 1700);
   });
   $('#styleChip').addEventListener('click', e => openMenu(e.currentTarget, m => {
-    for (const id of Arrange.STYLE_ORDER) item(m, (id === song.style ? icon('check') : '<span style="width:16px"></span>') + Arrange.STYLES[id].label, () => {
+    for (const id of Arrange.STYLE_ORDER) item(m, (id === song.style ? icon('check') : '<span style="width:16px"></span>') + styleName(id), () => {
       closeMenu(); if (id === song.style) return;
       if (song.arranged) commit(() => { song.style = id; }, 'style'); else { song.style = id; renderWork(); }
     });
   }));
-  // key menu (Figma 30): first the detected key + "（自动）", then all 24 keys. Changing key re-harmonises an arranged song.
+  // key menu (Figma 30): first the detected key + the auto suffix, then all 24 keys. Changing key re-harmonises an arranged song.
   const sameKey = (a, b) => a.tonic === b.tonic && a.mode === b.mode;
   $('#keyChip').addEventListener('click', e => openMenu(e.currentTarget, m => {
     const auto = song.autoKey || Theory.detectKey(song.sections.flatMap(s => s.melody ? s.melody.notes : [])); // older songs have no autoKey
     const setKey = k => { closeMenu(); if (sameKey(song.key, k)) return; commit(() => { song.key = { ...k }; if (song.arranged) Arrange.reharmonize(song); }); };
     const isAuto = sameKey(song.key, auto);
-    item(m, Theory.keyLabel(auto) + '（自动）', () => setKey(auto), { cls: 'auto' + (isAuto ? ' on' : '') });
+    item(m, keyName(auto) + t('key.auto'), () => setKey(auto), { cls: 'auto' + (isAuto ? ' on' : '') });
     m.appendChild(document.createElement('hr'));
     const g = document.createElement('div'); g.className = 'grid24'; m.appendChild(g);
     for (const mode of ['major', 'minor']) for (let t = 0; t < 12; t++) {
       const k = { tonic: t, mode };
-      item(g, Theory.keyLabel(k), () => setKey(k), { cls: !isAuto && sameKey(song.key, k) ? 'on' : '' });
+      item(g, keyName(k), () => setKey(k), { cls: !isAuto && sameKey(song.key, k) ? 'on' : '' });
     }
   }, 'left'));
   $('#tempoChip').addEventListener('click', e => openMenu(e.currentTarget, m => {
     let pushed = false;
-    const st = document.createElement('div'); st.className = 'stepper'; st.innerHTML = `<button aria-label="减慢">${icon('minus')}</button><output class="num">${song.bpm}</output><button aria-label="加快">${icon('plus')}</button>`;
+    const st = document.createElement('div'); st.className = 'stepper'; st.innerHTML = `<button aria-label="${t('slower')}">${icon('minus')}</button><output class="num">${song.bpm}</output><button aria-label="${t('faster')}">${icon('plus')}</button>`;
     const change = d => { if (!pushed) { pushHistory(snapshot()); pushed = true; } song.bpm = clamp(song.bpm + d, 40, 240); st.querySelector('output').textContent = song.bpm; afterChange(); };
     st.children[0].addEventListener('click', () => change(-5)); st.children[2].addEventListener('click', () => change(5));
     m.appendChild(st);
@@ -956,32 +956,32 @@
   /* ---------------- header menus ---------------- */
   $('#reBtn').addEventListener('click', e => openMenu(e.currentTarget, m => {
     let armed = false;
-    item(m, icon('mic') + '<span>从头开始</span>', (ev, b) => {
-      if (!armed) { armed = true; b.classList.add('danger'); b.querySelector('span').textContent = '确认从头开始'; return; }
+    item(m, icon('mic') + '<span>' + t('menu.restart') + '</span>', (ev, b) => {
+      if (!armed) { armed = true; b.classList.add('danger'); b.querySelector('span').textContent = t('menu.restartConfirm'); return; }
       closeMenu(); stopPlay(); song = null; sel = null; hist.undo = []; hist.redo = []; takes.clear(); show('home');
     });
-    if (song.arranged && preArrange) item(m, icon('x') + '取消编曲', () => { closeMenu(); const pre = preArrange; preArrange = null; commit(() => { song = JSON.parse(pre); }); });
+    if (song.arranged && preArrange) item(m, icon('x') + t('menu.cancelArrange'), () => { closeMenu(); const pre = preArrange; preArrange = null; commit(() => { song = JSON.parse(pre); }); });
     m.appendChild(document.createElement('hr'));
-    item(m, icon('undo') + '撤回<span class="kbd">Ctrl Z</span>', () => { closeMenu(); undo(); }, { disabled: !hist.undo.length });
+    item(m, icon('undo') + t('menu.undo') + '<span class="kbd">' + t('kbd.undo') + '</span>', () => { closeMenu(); undo(); }, { disabled: !hist.undo.length });
   }));
   $('#dlBtn').addEventListener('click', e => openMenu(e.currentTarget, m => {
-    item(m, icon('download') + 'MIDI', () => { closeMenu(); save(Arrange.toMidi(song), '哼唱成曲.mid'); });
+    item(m, icon('download') + 'MIDI', () => { closeMenu(); save(Arrange.toMidi(song), t('file.song') + '.mid'); });
     item(m, icon('download') + 'WAV', () => { closeMenu(); downloadMix(); });
-    item(m, icon('download') + '原声', () => { closeMenu(); downloadVoice(); });
+    item(m, icon('download') + t('menu.voice'), () => { closeMenu(); downloadVoice(); });
   }));
   async function downloadMix() {
-    toast('正在生成 WAV…');
+    toast(t('toast.makingWav'));
     const comp = Arrange.compile(song), buf = await Synth.render(comp.events, comp.duration, { lowpass: comp.tone });
-    save(Synth.wav(buf), '哼唱成曲.wav'); $('#toast').hidden = true;
+    save(Synth.wav(buf), t('file.song') + '.wav'); $('#toast').hidden = true;
   }
   function downloadVoice() {
     const ids = [...new Set(song.sections.map(s => s.take).filter(Boolean))].filter(id => takes.has(id));
-    if (!ids.length) return toast('没有找到原始录音。');
+    if (!ids.length) return toast(t('toast.noTake'));
     const bufs = ids.map(id => takes.get(id)), sr = bufs[0].sampleRate, gap = Math.round(sr * .5);
     const len = bufs.reduce((n, b) => n + b.length, 0) + gap * (bufs.length - 1);
     const out = new AudioBuffer({ length: len, sampleRate: sr, numberOfChannels: 1 }), d = out.getChannelData(0);
     let o = 0; for (const b of bufs) { d.set(b.getChannelData(0), o); o += b.length + gap; }
-    save(Synth.wav(out), '哼唱原声.wav');
+    save(Synth.wav(out), t('file.voice') + '.wav');
   }
   // Suno
   $('#sunoBtn').addEventListener('click', () => { $('#sunoPrompt').textContent = Arrange.sunoPrompt(song); $('#sunoModal').hidden = false; });
@@ -989,12 +989,12 @@
   $('#sunoSrc').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; $('#sunoSrc').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); });
   $('#sunoDl').addEventListener('click', () => { $('#sunoSrc [aria-pressed="true"]').dataset.v === 'voice' ? downloadVoice() : downloadMix(); });
   $('#sunoCopy').addEventListener('click', async () => {
-    const t = $('#sunoPrompt').textContent;
-    try { await navigator.clipboard.writeText(t); toast('已复制'); } catch (e) { const r = document.createRange(); r.selectNodeContents($('#sunoPrompt')); getSelection().removeAllRanges(); getSelection().addRange(r); }
+    const text = $('#sunoPrompt').textContent;
+    try { await navigator.clipboard.writeText(text); toast(t('copied')); } catch (e) { const r = document.createRange(); r.selectNodeContents($('#sunoPrompt')); getSelection().removeAllRanges(); getSelection().addRange(r); }
   });
 
   /* ---------------- add section ---------------- */
-  const ADD_NAMES = ['主歌', '副歌', '桥段', '尾声'];
+  const ADD_NAMES = ['主歌', '副歌', '桥段', '尾声']; // stored as-is; shown through secName()
   let addState = null;
   function segInit(el, items, val, onPick) {
     el.innerHTML = '';
@@ -1005,16 +1005,16 @@
     stopPlay(); hideInsert();
 
     addState = { name: song.sections.some(s => s.name === '主歌') ? '副歌' : '主歌', inst: 'piano', backing: true, metronome: true, bpm: song.bpm, insertAt: opts.insertAt ?? null, rec: null, res: null };
-    segInit($('#addName'), ADD_NAMES.map(n => [n, n]), addState.name, v => addState.name = v);
-    segInit($('#addInst'), Arrange.MELODY_INSTS, addState.inst, v => addState.inst = v);
+    segInit($('#addName'), ADD_NAMES.map(n => [n, secName(n)]), addState.name, v => addState.name = v);
+    segInit($('#addInst'), Arrange.MELODY_INSTS.map(([id]) => [id, instName(id)]), addState.inst, v => addState.inst = v);
     $('#addBacking').setAttribute('aria-checked', 'true');
     $('#addOk').disabled = true; $('#addNote').textContent = ''; $('#addNote').className = 'note'; $('#addBeats').hidden = true; $('#addTimerWrap').hidden = true;
-    $('#addRec').innerHTML = icon('mic'); $('#addRec').setAttribute('aria-label', '开始录音');
+    $('#addRec').innerHTML = icon('mic'); $('#addRec').setAttribute('aria-label', t('rec.start'));
     syncAddBeat();
     $('#addModal').hidden = false;
     setup($('#addCv'), $('#addArea').clientWidth || 600, $('#addArea').clientHeight || 200);
   }
-  // 节拍 row: metronome on/off and the recording tempo (only for this take; song.bpm is not changed)
+  // tempo row: metronome on/off and the recording tempo (only for this take; song.bpm is not changed)
   function syncAddBeat() {
     const A = addState; if (!A) return;
     $('#addMetro').setAttribute('aria-pressed', A.metronome);
@@ -1036,18 +1036,18 @@
     $('#addBeats').querySelectorAll('i').forEach(d => d.classList.remove('on'));
     $('#addOk').disabled = true; A.res = null;
     $('#addTimerWrap').hidden = false;
-    $('#addRec').innerHTML = icon('stop'); $('#addRec').setAttribute('aria-label', '停止');
+    $('#addRec').innerHTML = icon('stop'); $('#addRec').setAttribute('aria-label', t('rec.stop'));
     A.rec = await startCapture({ canvas: $('#addCv'), noteEl: note, beatEl: $('#addBeats'), timerEl: $('#addTimer'), metronome: A.metronome, bpm: A.bpm, backing, compact: true, color: instColor(A.inst) });
     if (!A.rec) { $('#addRec').innerHTML = icon('mic'); $('#addTimerWrap').hidden = true; }
   }
   async function stopAddRec() {
     const A = addState; if (!A || !A.rec) return;
     const R = A.rec; A.rec = null;
-    $('#addRec').innerHTML = icon('mic'); $('#addRec').setAttribute('aria-label', '重新录');
+    $('#addRec').innerHTML = icon('mic'); $('#addRec').setAttribute('aria-label', t('rec.again'));
     const out = await stopCapture(R);
     if (!out) return;
     const res = await analyzeTake(out.buffer, out.info, out.taps);
-    if (!res) { toast('没有听出旋律。离麦克风近一点再试。'); return; }
+    if (!res) { toast(t('toast.noMelodyClose')); return; }
     A.res = res; A.buffer = out.buffer; $('#addOk').disabled = false;
     $('#addNote').classList.remove('count');
     $('#addNote').textContent = ''; $('#addBeats').hidden = true;
@@ -1106,7 +1106,7 @@
   function promptRotate() {
     if (!isPhone() || landscapeMQ.matches) return;
     $('#rotateOverlay').hidden = false;
-    clearTimeout(rotateT); rotateT = setTimeout(() => { if (!$('#rotateOverlay').hidden) toast('尝试关闭旋转锁定。'); }, 5000);
+    clearTimeout(rotateT); rotateT = setTimeout(() => { if (!$('#rotateOverlay').hidden) toast(t('rotate.lock')); }, 5000);
   }
   function closeRotate() { clearTimeout(rotateT); $('#rotateOverlay').hidden = true; }
   $('#rotateSkip').addEventListener('click', closeRotate);
