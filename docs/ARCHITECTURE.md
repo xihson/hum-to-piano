@@ -53,6 +53,7 @@ song（见第 2 节）── commit() ──▶ 撤回历史
 song = {
   bpm: 100,
   key: { tonic: 0..11, mode: 'major' | 'minor' },
+  autoKey: { tonic, mode },   // newSong 时识别出的调，调菜单的“（自动）”项；旧数据没有时用全部旋律音重新识别
   arranged: false,          // 点过"编曲"之后为 true
   style: 'pop',             // Arrange.STYLES 的键
   mute: { 'melody:piano': true, clap: false, chords: false, bass: false, drums: false },

@@ -310,7 +310,8 @@
   }
   function newSong(res, buffer) {
     const take = 't' + Date.now(); takes.clear(); takes.set(take, buffer);
-    song = { bpm: res.bpm, key: Theory.detectKey(res.notes), arranged: false, style: 'pop', mute: {},
+    const autoKey = Theory.detectKey(res.notes);
+    song = { bpm: res.bpm, key: { ...autoKey }, autoKey, arranged: false, style: 'pop', mute: {},
       sections: [{ id: Arrange.uid(), name: '主歌', role: 'rec', bars: res.bars, melody: res.notes.length ? { inst: 'piano', notes: res.notes } : null, hits: res.hits, chords: null, take }] };
     hist.undo = []; hist.redo = []; preArrange = null; sel = null; playhead = 0;
     show('work');
@@ -903,11 +904,18 @@
   $('#styleChip').addEventListener('click', e => openMenu(e.currentTarget, m => {
     for (const id of Arrange.STYLE_ORDER) item(m, (id === song.style ? icon('check') : '<span style="width:16px"></span>') + Arrange.STYLES[id].label, () => { closeMenu(); song.style = id; renderWork(); });
   }));
+  // key menu (Figma 30): first the detected key + "（自动）", then all 24 keys. Changing key re-harmonises an arranged song.
+  const sameKey = (a, b) => a.tonic === b.tonic && a.mode === b.mode;
   $('#keyChip').addEventListener('click', e => openMenu(e.currentTarget, m => {
+    const auto = song.autoKey || Theory.detectKey(song.sections.flatMap(s => s.melody ? s.melody.notes : [])); // older songs have no autoKey
+    const setKey = k => { closeMenu(); if (sameKey(song.key, k)) return; commit(() => { song.key = { ...k }; if (song.arranged) Arrange.reharmonize(song); }); };
+    const isAuto = sameKey(song.key, auto);
+    item(m, Theory.keyLabel(auto) + '（自动）', () => setKey(auto), { cls: 'auto' + (isAuto ? ' on' : '') });
+    m.appendChild(document.createElement('hr'));
     const g = document.createElement('div'); g.className = 'grid24'; m.appendChild(g);
     for (const mode of ['major', 'minor']) for (let t = 0; t < 12; t++) {
-      const k = { tonic: t, mode }, on = song.key.tonic === t && song.key.mode === mode;
-      item(g, Theory.keyLabel(k), () => { closeMenu(); if (on) return; commit(() => { song.key = k; if (song.arranged) Arrange.reharmonize(song); }); }, { cls: on ? 'on' : '' });
+      const k = { tonic: t, mode };
+      item(g, Theory.keyLabel(k), () => setKey(k), { cls: !isAuto && sameKey(song.key, k) ? 'on' : '' });
     }
   }, 'left'));
   $('#tempoChip').addEventListener('click', e => openMenu(e.currentTarget, m => {
