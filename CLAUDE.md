@@ -6,6 +6,7 @@
 
 ## 先读什么
 
+0. **如果 [docs/HANDOFF.md](docs/HANDOFF.md) 存在，先读它**：上一个 session 留下的、已经确认但还没写的代码任务。
 1. [docs/UX-WALKTHROUGH.md](docs/UX-WALKTHROUGH.md)：每个界面、每个控件是什么，在哪里，由哪个函数处理。
 2. [docs/DECISIONS.md](docs/DECISIONS.md)：用户已经定下的事。**改之前先看，不要推翻。**
 3. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：数据模型、数据流、模块接口、怎么加风格或乐器、可调参数、已知限制。
